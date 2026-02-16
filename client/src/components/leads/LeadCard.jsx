@@ -1,0 +1,85 @@
+import { Link } from 'react-router-dom';
+import StatusBadge from '../common/StatusBadge';
+import { formatNaira } from '../../utils/formatCurrency';
+import { formatDate, isOverdue } from '../../utils/formatDate';
+import LeadStatusDropdown from './LeadStatusDropdown';
+import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar } from 'react-icons/hi';
+
+export default function LeadCard({ lead, onStatusChange }) {
+  const overdue = lead.nextFollowUpDate && isOverdue(lead.nextFollowUpDate) &&
+    !['Closed Won', 'Closed Lost', 'Not Interested'].includes(lead.currentStatus);
+
+  return (
+    <div className={`card hover:shadow-md transition-shadow ${overdue ? 'border-l-4 border-l-red-400' : ''}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <Link
+            to={`/leads/${lead._id}`}
+            className="text-base font-semibold text-gray-900 hover:text-primary-600 transition-colors"
+          >
+            {lead.schoolName}
+          </Link>
+          <p className="text-xs text-gray-500 mt-0.5">{lead.schoolId} • {lead.territory}</p>
+        </div>
+        <LeadStatusDropdown
+          currentStatus={lead.currentStatus}
+          onChange={(status) => onStatusChange(lead._id, status)}
+        />
+      </div>
+
+      <div className="space-y-2 text-sm text-gray-600">
+        {lead.personMet && (
+          <p className="flex items-center gap-2">
+            <span className="font-medium">{lead.personMet}</span>
+            <span className="text-gray-400">•</span>
+            <span>{lead.positionTitle}</span>
+          </p>
+        )}
+
+        <div className="flex items-center gap-4">
+          {lead.phoneNumber && (
+            <span className="flex items-center gap-1">
+              <HiOutlinePhone className="w-4 h-4 text-gray-400" />
+              {lead.phoneNumber}
+            </span>
+          )}
+          {lead.emailAddress && (
+            <span className="flex items-center gap-1">
+              <HiOutlineMail className="w-4 h-4 text-gray-400" />
+              {lead.emailAddress}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+          <div>
+            <span className="text-gray-500">Deal: </span>
+            <span className="font-semibold text-gray-900">
+              {formatNaira(lead.negotiatedPrice || lead.proposedPrice)}
+            </span>
+          </div>
+          {lead.probabilityOfClosing > 0 && (
+            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
+              {lead.probabilityOfClosing}% chance
+            </span>
+          )}
+        </div>
+
+        {lead.nextFollowUpDate && (
+          <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+            <HiOutlineCalendar className="w-4 h-4" />
+            {overdue ? 'OVERDUE: ' : 'Follow-up: '}
+            {formatDate(lead.nextFollowUpDate)}
+            {lead.followUpMethod && ` via ${lead.followUpMethod}`}
+          </div>
+        )}
+      </div>
+
+      {lead.assignedTo && (
+        <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-gray-500">
+          Assigned to: {lead.assignedTo.firstName} {lead.assignedTo.lastName}
+        </div>
+      )}
+    </div>
+  );
+}
