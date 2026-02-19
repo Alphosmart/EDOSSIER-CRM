@@ -114,6 +114,17 @@ const LeadSchema = new mongoose.Schema({
   // Notes
   additionalNotes: { type: String },
 
+  // File attachments
+  attachments: [{
+    filename: { type: String },
+    originalName: { type: String },
+    filePath: { type: String },
+    fileSize: { type: Number },
+    mimetype: { type: String },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    uploadedAt: { type: Date, default: Date.now }
+  }],
+
   // Soft delete
   isDeleted: { type: Boolean, default: false },
 
@@ -121,6 +132,14 @@ const LeadSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+// Indexes for performance
+LeadSchema.index({ assignedTo: 1, currentStatus: 1 });
+LeadSchema.index({ territory: 1 });
+LeadSchema.index({ nextFollowUpDate: 1 });
+LeadSchema.index({ schoolName: 'text', personMet: 'text', city: 'text', schoolId: 'text' });
+LeadSchema.index({ createdAt: -1 });
+LeadSchema.index({ isDeleted: 1 });
 
 // Auto-generate schoolId
 LeadSchema.pre('save', async function (next) {

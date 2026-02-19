@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const UserSchema = new mongoose.Schema({
   firstName: { type: String, required: [true, 'First name is required'], trim: true },
@@ -26,6 +27,11 @@ const UserSchema = new mongoose.Schema({
   },
   defaultCommissionRate: { type: Number, default: 25, min: 0, max: 100 },
   isActive: { type: Boolean, default: true },
+  // Password reset
+  resetPasswordToken: { type: String, select: false },
+  resetPasswordExpiry: { type: Date, select: false },
+  // JWT refresh token
+  refreshToken: { type: String, select: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -44,11 +50,26 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
+// Generate password reset token
+UserSchema.methods.generatePasswordResetToken = function () {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  this.resetPasswordExpiry = Date.now() + 30 * 60 * 1000; // 30 minutes
+  return resetToken; // Return raw token (send via email)
+};
+
 // Return user without password
 UserSchema.methods.toJSON = function () {
   const user = this.toObject();
   delete user.password;
+  delete user.resetPasswordToken;
+  delete user.resetPasswordExpiry;
+  delete user.refreshToken;
   return user;
 };
+
+UserSchema.index({ email: 1 });
+UserSchema.index({ role: 1 });
+UserSchema.index({ territory: 1 });
 
 module.exports = mongoose.model('User', UserSchema);

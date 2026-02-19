@@ -10,5 +10,17 @@ export const leadService = {
   getOverdue: () => api.get('/leads/overdue'),
   getToday: () => api.get('/leads/today'),
   getActivities: (leadId) => api.get(`/activities/${leadId}`),
-  createActivity: (data) => api.post('/activities', data)
+  createActivity: (data) => api.post('/activities', data),
+
+  // CSV Import
+  importLeads: (formData) => api.post('/leads/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+
+  // File Attachments
+  addAttachment: (leadId, formData) => api.post(`/leads/${leadId}/attachments`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  deleteAttachment: (leadId, attachmentId) =>
+    api.delete(`/leads/${leadId}/attachments/${attachmentId}`)
 };

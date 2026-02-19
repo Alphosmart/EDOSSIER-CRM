@@ -1,7 +1,8 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_LABELS } from '../../utils/constants';
 import { HiOutlineMenu, HiOutlineLogout, HiOutlineUser } from 'react-icons/hi';
+import GlobalSearch from './GlobalSearch';
 
 export default function Navbar({ onToggleSidebar }) {
   const { user, logout } = useAuth();
@@ -14,8 +15,8 @@ export default function Navbar({ onToggleSidebar }) {
 
   return (
     <nav className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-30 h-16">
-      <div className="flex items-center justify-between h-full px-4">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between h-full px-4 gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={onToggleSidebar}
             className="p-2 rounded-lg hover:bg-gray-100 lg:hidden"
@@ -30,7 +31,12 @@ export default function Navbar({ onToggleSidebar }) {
           </Link>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* Global Search — centred, grows */}
+        <div className="flex-1 max-w-sm hidden md:block">
+          <GlobalSearch />
+        </div>
+
+        <div className="flex items-center gap-4 shrink-0">
           <div className="hidden sm:block text-right">
             <p className="text-sm font-medium text-gray-900">
               {user?.firstName} {user?.lastName}

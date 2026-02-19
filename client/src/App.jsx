@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
 import LoadingSpinner from './components/common/LoadingSpinner';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Pages
 import LoginPage from './pages/LoginPage';
@@ -18,6 +19,8 @@ import UsersPage from './pages/UsersPage';
 import SubscriptionPage from './pages/SubscriptionPage';
 import ForecastPage from './pages/ForecastPage';
 import MonthlyPerformancePage from './pages/MonthlyPerformancePage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Protected Route wrapper
 function ProtectedRoute({ roles }) {
@@ -60,6 +63,8 @@ function AppRoutes() {
     <Routes>
       {/* Public */}
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
       {/* Protected */}
       <Route element={<ProtectedRoute />}>
@@ -94,10 +99,11 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AuthProvider>
-        <AppRoutes />
-        <Toaster
+    <ErrorBoundary>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AuthProvider>
+          <AppRoutes />
+          <Toaster
           position="top-right"
           toastOptions={{
             duration: 3000,
@@ -115,5 +121,6 @@ export default function App() {
         />
       </AuthProvider>
     </Router>
+    </ErrorBoundary>
   );
 }

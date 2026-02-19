@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -65,6 +65,11 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
+          <p className="text-center text-sm">
+            <Link to="/forgot-password" className="text-primary-600 hover:underline">
+              Forgot your password?
+            </Link>
+          </p>
         </form>
 
         <div className="mt-6 p-4 bg-gray-50 rounded-lg text-xs text-gray-500">

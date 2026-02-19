@@ -1,15 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { leadService } from '../services/leadService';
 import LeadCard from '../components/leads/LeadCard';
 import LeadStatusDropdown from '../components/leads/LeadStatusDropdown';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import Pagination from '../components/common/Pagination';
 import { LEAD_STATUSES, TERRITORIES } from '../utils/constants';
 import { formatNaira } from '../utils/formatCurrency';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlineSearch, HiOutlineFilter } from 'react-icons/hi';
+import Papa from 'papaparse';
+import { useAuth } from '../context/AuthContext';
+import {
+  HiOutlinePlus, HiOutlineSearch, HiOutlineUpload,
+  HiOutlineX, HiOutlineDocumentText, HiOutlineCheckCircle
+} from 'react-icons/hi';
 
 export default function LeadsPage() {
+  const { hasRole } = useAuth();
+  const canImport = hasRole('admin', 'manager');
+
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -18,7 +27,14 @@ export default function LeadsPage() {
   const [territoryFilter, setTerritoryFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
+  const [viewMode, setViewMode] = useState('cards');
+
+  // Import state
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const fileInputRef = useRef();
 
   useEffect(() => {
     loadLeads();
@@ -59,6 +75,43 @@ export default function LeadsPage() {
     }
   };
 
+  // CSV file selected → parse preview
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImportFile(file);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      preview: 5,
+      complete: (result) => {
+        setImportPreview(result.data);
+      }
+    });
+  };
+
+  const handleImport = async () => {
+    if (!importFile) return toast.error('Please select a CSV file');
+    setImportLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      const { data } = await leadService.importLeads(formData);
+      toast.success(data.message);
+      if (data.errors?.length > 0) {
+        console.log('Import warnings:', data.errors);
+      }
+      setShowImport(false);
+      setImportFile(null);
+      setImportPreview([]);
+      loadLeads();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Import failed');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -66,11 +119,113 @@ export default function LeadsPage() {
           <h1 className="page-title">Leads</h1>
           <p className="text-sm text-gray-500 mt-1">{total} total leads</p>
         </div>
-        <Link to="/leads/new" className="btn-primary flex items-center gap-2">
-          <HiOutlinePlus className="w-5 h-5" />
-          Add Lead
-        </Link>
+        <div className="flex items-center gap-2">
+          {canImport && (
+            <button
+              onClick={() => setShowImport(true)}
+              className="btn-secondary flex items-center gap-2 text-sm"
+            >
+              <HiOutlineUpload className="w-4 h-4" />
+              Import CSV
+            </button>
+          )}
+          <Link to="/leads/new" className="btn-primary flex items-center gap-2">
+            <HiOutlinePlus className="w-5 h-5" />
+            Add Lead
+          </Link>
+        </div>
       </div>
+
+      {/* Import Modal */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Import Leads from CSV</h2>
+              <button onClick={() => { setShowImport(false); setImportFile(null); setImportPreview([]); }}>
+                <HiOutlineX className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Column reference */}
+              <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
+                <p className="font-semibold mb-1">Expected CSV columns (headers must match exactly):</p>
+                <p className="font-mono">schoolName, schoolType, address, city, state, lga, territory, personMet, positionTitle, phoneNumber, emailAddress, currentStatus, nextFollowUpDate, proposedPrice, responseSummary</p>
+              </div>
+
+              {/* File picker */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
+              >
+                <HiOutlineDocumentText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                {importFile ? (
+                  <p className="text-sm font-medium text-primary-600 flex items-center justify-center gap-1">
+                    <HiOutlineCheckCircle className="w-4 h-4" />
+                    {importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500">Click to select a CSV file, or drag and drop</p>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Preview table */}
+              {importPreview.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-1 uppercase">Preview (first 5 rows)</p>
+                  <div className="overflow-x-auto rounded-lg border text-xs">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {Object.keys(importPreview[0]).slice(0, 6).map(col => (
+                            <th key={col} className="px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap">{col}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {importPreview.map((row, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            {Object.keys(importPreview[0]).slice(0, 6).map(col => (
+                              <td key={col} className="px-3 py-2 text-gray-700 whitespace-nowrap truncate max-w-[120px]">{row[col]}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 p-4 border-t">
+              <button
+                onClick={() => { setShowImport(false); setImportFile(null); setImportPreview([]); }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={!importFile || importLoading}
+                className="btn-primary flex items-center gap-2"
+              >
+                {importLoading ? (
+                  <><span className="animate-spin">⟳</span> Importing…</>
+                ) : (
+                  <><HiOutlineUpload className="w-4 h-4" /> Import Leads</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card">
@@ -182,25 +337,13 @@ export default function LeadsPage() {
 
       {/* Pagination */}
       {pages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="btn-secondary text-sm"
-          >
-            Previous
-          </button>
-          <span className="text-sm text-gray-600">
-            Page {page} of {pages}
-          </span>
-          <button
-            onClick={() => setPage(p => Math.min(pages, p + 1))}
-            disabled={page === pages}
-            className="btn-secondary text-sm"
-          >
-            Next
-          </button>
-        </div>
+        <Pagination
+          page={page}
+          pages={pages}
+          total={total}
+          limit={20}
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { leadService } from '../services/leadService';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,8 @@ import toast from 'react-hot-toast';
 import {
   HiOutlineArrowLeft, HiOutlinePencil, HiOutlineTrash,
   HiOutlinePhone, HiOutlineMail, HiOutlineLocationMarker,
-  HiOutlineCalendar, HiOutlinePlus
+  HiOutlineCalendar, HiOutlinePlus, HiOutlinePaperClip,
+  HiOutlineDownload, HiOutlineX, HiOutlineDocument
 } from 'react-icons/hi';
 
 export default function LeadDetailPage() {
@@ -31,6 +32,10 @@ export default function LeadDetailPage() {
     outcome: '',
     nextAction: ''
   });
+
+  // Attachment state
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const attachmentInputRef = useRef(null);
 
   useEffect(() => {
     loadLead();
@@ -94,6 +99,35 @@ export default function LeadDetailPage() {
       loadActivities();
     } catch (error) {
       toast.error('Failed to log activity');
+    }
+  };
+
+  const handleUploadAttachment = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setAttachmentLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      await leadService.addAttachment(id, formData);
+      toast.success('File uploaded successfully');
+      loadLead(); // Refresh to show new attachment
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Upload failed');
+    } finally {
+      setAttachmentLoading(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId, filename) => {
+    if (!window.confirm(`Delete "${filename}"?`)) return;
+    try {
+      await leadService.deleteAttachment(id, attachmentId);
+      toast.success('Attachment deleted');
+      loadLead();
+    } catch (error) {
+      toast.error('Failed to delete attachment');
     }
   };
 
@@ -429,6 +463,76 @@ export default function LeadDetailPage() {
                 <span className="ml-2">{'★'.repeat(lead.relationshipStrength || 0)}{'☆'.repeat(5 - (lead.relationshipStrength || 0))}</span>
               </div>
             </div>
+          </div>
+
+          {/* Attachments */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <HiOutlinePaperClip className="w-5 h-5 text-gray-400" />
+                Attachments
+                {lead.attachments?.length > 0 && (
+                  <span className="text-xs text-gray-500 font-normal">({lead.attachments.length})</span>
+                )}
+              </h3>
+              <button
+                onClick={() => attachmentInputRef.current?.click()}
+                disabled={attachmentLoading}
+                className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+              >
+                {attachmentLoading ? <span className="animate-spin">⟳</span> : <HiOutlinePlus className="w-4 h-4" />}
+                {attachmentLoading ? 'Uploading...' : 'Add File'}
+              </button>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                onChange={handleUploadAttachment}
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.txt"
+              />
+            </div>
+
+            {(!lead.attachments || lead.attachments.length === 0) ? (
+              <p className="text-sm text-gray-400 text-center py-4">No attachments yet</p>
+            ) : (
+              <ul className="space-y-2">
+                {lead.attachments.map((att) => (
+                  <li key={att._id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 hover:bg-gray-100 group">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <HiOutlineDocument className="w-5 h-5 text-gray-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{att.originalName}</p>
+                        <p className="text-xs text-gray-400">
+                          {att.fileSize ? `${(att.fileSize / 1024).toFixed(1)} KB` : ''}
+                          {att.fileSize && att.uploadedAt ? ' · ' : ''}
+                          {att.uploadedAt ? new Date(att.uploadedAt).toLocaleDateString() : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <a
+                        href={`/${att.filePath?.replace(/\\/g, '/')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded hover:bg-blue-100 text-blue-500"
+                        title="Download"
+                      >
+                        <HiOutlineDownload className="w-4 h-4" />
+                      </a>
+                      {hasRole('manager', 'admin') && (
+                        <button
+                          onClick={() => handleDeleteAttachment(att._id, att.originalName)}
+                          className="p-1.5 rounded hover:bg-red-100 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete"
+                        >
+                          <HiOutlineX className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Activity Log */}

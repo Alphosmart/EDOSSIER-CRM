@@ -1,11 +1,18 @@
 import api from './api';
 
+const buildParams = (opts = {}) => {
+  const params = {};
+  if (opts.from) params.from = opts.from;
+  if (opts.to) params.to = opts.to;
+  return { params };
+};
+
 export const dashboardService = {
-  getKPIs: () => api.get('/dashboard/kpis'),
-  getPipeline: () => api.get('/dashboard/pipeline'),
-  getRevenue: () => api.get('/dashboard/revenue'),
-  getMonthly: () => api.get('/dashboard/monthly'),
-  getTerritory: () => api.get('/dashboard/territory'),
-  getForecast: () => api.get('/dashboard/forecast'),
-  getMonthlyPerformance: () => api.get('/dashboard/monthly-performance')
+  getKPIs: (opts) => api.get('/dashboard/kpis', buildParams(opts)),
+  getPipeline: (opts) => api.get('/dashboard/pipeline', buildParams(opts)),
+  getRevenue: (opts) => api.get('/dashboard/revenue', buildParams(opts)),
+  getMonthly: (opts) => api.get('/dashboard/monthly', buildParams(opts)),
+  getTerritory: (opts) => api.get('/dashboard/territory', buildParams(opts)),
+  getForecast: (opts) => api.get('/dashboard/forecast', buildParams(opts)),
+  getMonthlyPerformance: (opts) => api.get('/dashboard/monthly-performance', buildParams(opts))
 };

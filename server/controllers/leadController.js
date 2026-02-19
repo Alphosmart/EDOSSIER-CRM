@@ -1,6 +1,10 @@
 const Lead = require('../models/Lead');
 const Activity = require('../models/Activity');
 const CommissionPayout = require('../models/CommissionPayout');
+const AuditLog = require('../models/AuditLog');
+const csv = require('csv-parse/sync');
+const fs = require('fs');
+const path = require('path');
 
 // Helper: filter leads by user role
 const filterLeadsByRole = (user) => {
@@ -108,6 +112,19 @@ exports.createLead = async (req, res) => {
       leadData.commissionPercentage = req.user.defaultCommissionRate;
     }
 
+    // Duplicate detection: same school name in same territory/LGA
+    const duplicateFilter = { schoolName: { $regex: `^${leadData.schoolName}$`, $options: 'i' } };
+    if (leadData.lga) duplicateFilter.lga = { $regex: `^${leadData.lga}$`, $options: 'i' };
+    else if (leadData.territory) duplicateFilter.territory = leadData.territory;
+
+    const existing = await Lead.findOne(duplicateFilter);
+    if (existing) {
+      return res.status(409).json({
+        message: `A lead for "${existing.schoolName}" already exists in this area (ID: ${existing.schoolId}).`,
+        duplicate: { _id: existing._id, schoolId: existing.schoolId, schoolName: existing.schoolName }
+      });
+    }
+
     const lead = await Lead.create(leadData);
 
     // Log activity
@@ -117,6 +134,16 @@ exports.createLead = async (req, res) => {
       activityType: 'Note Added',
       description: `Lead created: ${lead.schoolName}`,
       outcome: 'New lead added to pipeline'
+    });
+
+    // Audit log
+    await AuditLog.create({
+      userId: req.user._id,
+      userEmail: req.user.email,
+      action: 'CREATE',
+      resource: 'lead',
+      resourceId: lead._id,
+      ip: req.ip
     });
 
     const populatedLead = await Lead.findById(lead._id)
@@ -277,6 +304,171 @@ exports.getTodayLeads = async (req, res) => {
       .sort({ nextFollowUpDate: 1 });
 
     res.json(leads);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Import leads from CSV
+// @route   POST /api/leads/import
+// @access  Private (manager/admin)
+exports.importLeads = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    let fileContent;
+    try {
+      fileContent = fs.readFileSync(req.file.path, 'utf8');
+    } catch (err) {
+      return res.status(400).json({ message: 'Could not read uploaded file' });
+    }
+
+    let records;
+    try {
+      records = csv.parse(fileContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+      });
+    } catch (parseErr) {
+      return res.status(400).json({ message: `CSV parse error: ${parseErr.message}` });
+    }
+
+    if (!records || records.length === 0) {
+      return res.status(400).json({ message: 'CSV file is empty or has no valid rows' });
+    }
+
+    const results = { imported: 0, skipped: 0, errors: [] };
+    const territories = ['Kaduna', 'Abuja', 'Lagos', 'Other'];
+
+    for (let i = 0; i < records.length; i++) {
+      const row = records[i];
+      const rowNum = i + 2; // Account for header row
+
+      try {
+        if (!row.schoolName) {
+          results.errors.push({ row: rowNum, error: 'Missing schoolName' });
+          results.skipped++;
+          continue;
+        }
+
+        // Check for duplicate
+        const existing = await Lead.findOne({
+          schoolName: { $regex: `^${row.schoolName.trim()}$`, $options: 'i' }
+        });
+        if (existing) {
+          results.skipped++;
+          results.errors.push({ row: rowNum, school: row.schoolName, error: `Duplicate: ${existing.schoolId}` });
+          continue;
+        }
+
+        const leadData = {
+          schoolName: row.schoolName?.trim(),
+          schoolType: row.schoolType,
+          address: row.address,
+          city: row.city,
+          state: row.state,
+          lga: row.lga,
+          territory: territories.includes(row.territory) ? row.territory : (req.user.territory || 'Other'),
+          personMet: row.personMet,
+          positionTitle: row.positionTitle,
+          phoneNumber: row.phoneNumber,
+          emailAddress: row.emailAddress,
+          currentStatus: row.currentStatus || 'Interested',
+          nextFollowUpDate: row.nextFollowUpDate ? new Date(row.nextFollowUpDate) : undefined,
+          proposedPrice: parseFloat(row.proposedPrice) || 0,
+          responseSummary: row.responseSummary,
+          assignedTo: req.user._id,
+          commissionPercentage: parseFloat(row.commissionPercentage) || req.user.defaultCommissionRate || 25
+        };
+
+        await Lead.create(leadData);
+        results.imported++;
+      } catch (rowErr) {
+        results.errors.push({ row: rowNum, school: row.schoolName, error: rowErr.message });
+        results.skipped++;
+      }
+    }
+
+    // Clean up uploaded file
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+
+    // Audit log
+    await AuditLog.create({
+      userId: req.user._id,
+      userEmail: req.user.email,
+      action: 'IMPORT',
+      resource: 'lead',
+      changes: { imported: results.imported, skipped: results.skipped },
+      ip: req.ip
+    });
+
+    res.json({
+      message: `Import complete: ${results.imported} imported, ${results.skipped} skipped`,
+      ...results
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Add attachment to lead
+// @route   POST /api/leads/:id/attachments
+// @access  Private
+exports.addAttachment = async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ message: 'Lead not found' });
+
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+
+    const attachment = {
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      filePath: req.file.path.replace(/\\/g, '/'),
+      fileSize: req.file.size,
+      mimetype: req.file.mimetype,
+      uploadedBy: req.user._id
+    };
+
+    lead.attachments.push(attachment);
+    await lead.save();
+
+    await Activity.create({
+      leadId: lead._id,
+      userId: req.user._id,
+      activityType: 'Note Added',
+      description: `File attached: ${req.file.originalname}`
+    });
+
+    res.json({ message: 'File uploaded successfully', attachment });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete attachment from lead
+// @route   DELETE /api/leads/:id/attachments/:attachmentId
+// @access  Private (manager/admin)
+exports.deleteAttachment = async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ message: 'Lead not found' });
+
+    const attachment = lead.attachments.id(req.params.attachmentId);
+    if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
+
+    // Remove file from disk
+    try {
+      fs.unlinkSync(attachment.filePath);
+    } catch (e) { /* file may not exist */ }
+
+    attachment.deleteOne();
+    await lead.save();
+
+    res.json({ message: 'Attachment deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

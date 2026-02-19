@@ -29,22 +29,33 @@ export default function DashboardPage() {
   const [today, setToday] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Date range filter
+  const getDefaultFrom = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().slice(0, 10);
+  };
+  const [dateFrom, setDateFrom] = useState(getDefaultFrom());
+  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
+
   useEffect(() => {
     loadDashboard();
   }, []);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (from = dateFrom, to = dateTo) => {
+    setLoading(true);
     try {
+      const opts = { from, to };
       const promises = [
-        dashboardService.getKPIs(),
-        dashboardService.getPipeline(),
-        dashboardService.getRevenue(),
+        dashboardService.getKPIs(opts),
+        dashboardService.getPipeline(opts),
+        dashboardService.getRevenue(opts),
         leadService.getOverdue(),
         leadService.getToday()
       ];
       // Only load territory data for admin/manager
       if (isAdminOrManager) {
-        promises.push(dashboardService.getTerritory());
+        promises.push(dashboardService.getTerritory(opts));
       }
 
       const results = await Promise.all(promises);
@@ -63,18 +74,53 @@ export default function DashboardPage() {
     }
   };
 
+  const handleApplyFilter = () => loadDashboard(dateFrom, dateTo);
+
+  const handleResetFilter = () => {
+    const from = getDefaultFrom();
+    const to = new Date().toISOString().slice(0, 10);
+    setDateFrom(from);
+    setDateTo(to);
+    loadDashboard(from, to);
+  };
+
   if (loading) return <LoadingSpinner size="lg" />;
 
   // ────── ADMIN / MANAGER DASHBOARD ──────
   if (isAdminOrManager) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="page-title">Management Dashboard</h1>
             <p className="text-sm text-gray-500 mt-0.5">Organisation-wide overview</p>
           </div>
-          <button onClick={loadDashboard} className="btn-secondary text-sm">Refresh</button>
+          {/* Date Range Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 whitespace-nowrap">From</label>
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo}
+                onChange={e => setDateFrom(e.target.value)}
+                className="input-field py-1.5 text-sm w-36"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 whitespace-nowrap">To</label>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={e => setDateTo(e.target.value)}
+                className="input-field py-1.5 text-sm w-36"
+              />
+            </div>
+            <button onClick={handleApplyFilter} className="btn-primary text-sm py-1.5 px-3">Apply</button>
+            <button onClick={handleResetFilter} className="btn-secondary text-sm py-1.5 px-3">Reset</button>
+          </div>
         </div>
 
         {/* Row 1 – Revenue & Deals */}
@@ -159,12 +205,37 @@ export default function DashboardPage() {
   // ────── SALES REP / TEAM LEAD DASHBOARD ──────
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="page-title">My Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">Welcome back, {user?.firstName}!</p>
         </div>
-        <button onClick={loadDashboard} className="btn-secondary text-sm">Refresh</button>
+        {/* Date Range Filter */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500 whitespace-nowrap">From</label>
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo}
+              onChange={e => setDateFrom(e.target.value)}
+              className="input-field py-1.5 text-sm w-36"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500 whitespace-nowrap">To</label>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={e => setDateTo(e.target.value)}
+              className="input-field py-1.5 text-sm w-36"
+            />
+          </div>
+          <button onClick={handleApplyFilter} className="btn-primary text-sm py-1.5 px-3">Apply</button>
+          <button onClick={handleResetFilter} className="btn-secondary text-sm py-1.5 px-3">Reset</button>
+        </div>
       </div>
 
       {/* Row 1 – Personal KPIs */}
