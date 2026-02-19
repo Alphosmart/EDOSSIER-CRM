@@ -1,4 +1,15 @@
 const Lead = require('../models/Lead');
+const { getRateMap } = require('./exchangeRateController');
+
+/**
+ * Convert any currency amount to NGN equivalent using the stored rate map.
+ * Falls back to treating the amount as NGN if the currency is unknown.
+ */
+const toNGN = (amount, currency, rateMap) => {
+  if (!amount) return 0;
+  if (!currency || currency === 'NGN' || !rateMap) return amount;
+  return amount * (rateMap[currency] || 1);
+};
 
 // Helper: filter by role
 const filterByRole = (user, fromDate, toDate) => {
@@ -32,7 +43,7 @@ exports.getKPIs = async (req, res) => {
   try {
     const { from, to } = req.query;
     const filter = filterByRole(req.user, from, to);
-    const leads = await Lead.find(filter);
+    const [leads, rateMap] = await Promise.all([Lead.find(filter), getRateMap()]);
 
     const activeStatuses = [
       'Interested', 'Needs Proposal', 'Needs Approval',
@@ -62,11 +73,11 @@ exports.getKPIs = async (req, res) => {
       return date >= today && date < tomorrow;
     });
 
-    const totalClosedRevenue = closedWon.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0);
+    const totalClosedRevenue = closedWon.reduce((sum, l) => sum + toNGN(l.negotiatedPrice || 0, l.currency, rateMap), 0);
     const totalCommissionEarned = closedWon.reduce((sum, l) => sum + (l.commissionAmount || 0), 0);
-    const activePipelineValue = activeLeads.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0);
+    const activePipelineValue = activeLeads.reduce((sum, l) => sum + toNGN(l.negotiatedPrice || 0, l.currency, rateMap), 0);
     const weightedForecast = activeLeads.reduce((sum, l) => {
-      return sum + ((l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100));
+      return sum + (toNGN(l.negotiatedPrice || 0, l.currency, rateMap) * ((l.probabilityOfClosing || 0) / 100));
     }, 0);
 
     const statusBreakdown = {};
@@ -129,11 +140,11 @@ exports.getRevenue = async (req, res) => {
   try {
     const { from, to } = req.query;
     const filter = filterByRole(req.user, from, to);
-    const leads = await Lead.find(filter);
+    const [leads, rateMap] = await Promise.all([Lead.find(filter), getRateMap()]);
 
     const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
 
-    // Monthly revenue for the past 12 months
+    // Monthly revenue for the past 12 months (NGN-converted)
     const monthlyRevenue = [];
     const now = new Date();
 
@@ -148,7 +159,7 @@ exports.getRevenue = async (req, res) => {
 
       monthlyRevenue.push({
         month: month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        revenue: monthDeals.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0),
+        revenue: monthDeals.reduce((sum, l) => sum + toNGN(l.negotiatedPrice || 0, l.currency, rateMap), 0),
         deals: monthDeals.length
       });
     }
@@ -160,14 +171,14 @@ exports.getRevenue = async (req, res) => {
     ];
     const activeLeads = leads.filter(l => activeStatuses.includes(l.currentStatus));
     const forecast = activeLeads.reduce((sum, l) => {
-      return sum + ((l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100));
+      return sum + (toNGN(l.negotiatedPrice || 0, l.currency, rateMap) * ((l.probabilityOfClosing || 0) / 100));
     }, 0);
 
     res.json({
       monthlyRevenue,
-      totalClosed: closedWon.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0),
+      totalClosed: closedWon.reduce((sum, l) => sum + toNGN(l.negotiatedPrice || 0, l.currency, rateMap), 0),
       forecast,
-      activePipeline: activeLeads.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0)
+      activePipeline: activeLeads.reduce((sum, l) => sum + toNGN(l.negotiatedPrice || 0, l.currency, rateMap), 0)
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -251,7 +262,10 @@ exports.getForecast = async (req, res) => {
   try {
     const { from, to } = req.query;
     const filter = filterByRole(req.user, from, to);
-    const leads = await Lead.find(filter).populate('assignedTo', 'firstName lastName territory');
+    const [leads, rateMap] = await Promise.all([
+      Lead.find(filter).populate('assignedTo', 'firstName lastName territory'),
+      getRateMap()
+    ]);
 
     const activeStatuses = [
       'Interested', 'Needs Proposal', 'Needs Approval',
@@ -279,10 +293,10 @@ exports.getForecast = async (req, res) => {
       return d >= nextMonthStart && d <= nextMonthEnd;
     });
 
-    // Total pipeline metrics
-    const totalNegotiatedRevenue = activeLeads.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0);
+    // Total pipeline metrics (all converted to NGN)
+    const totalNegotiatedRevenue = activeLeads.reduce((sum, l) => sum + toNGN(l.negotiatedPrice || 0, l.currency, rateMap), 0);
     const weightedForecast = activeLeads.reduce((sum, l) => {
-      return sum + ((l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100));
+      return sum + (toNGN(l.negotiatedPrice || 0, l.currency, rateMap) * ((l.probabilityOfClosing || 0) / 100));
     }, 0);
 
     // By stage
@@ -291,13 +305,13 @@ exports.getForecast = async (req, res) => {
       return {
         status,
         count: stageLeads.length,
-        totalValue: stageLeads.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0),
+        totalValue: stageLeads.reduce((sum, l) => sum + toNGN(l.negotiatedPrice || 0, l.currency, rateMap), 0),
         weightedValue: stageLeads.reduce((sum, l) =>
-          sum + ((l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100)), 0)
+          sum + (toNGN(l.negotiatedPrice || 0, l.currency, rateMap) * ((l.probabilityOfClosing || 0) / 100)), 0)
       };
     });
 
-    // Top prospects (highest weighted value, active only)
+    // Top prospects (highest weighted value, NGN-converted)
     const topProspects = activeLeads
       .map(l => ({
         _id: l._id,
@@ -305,9 +319,10 @@ exports.getForecast = async (req, res) => {
         schoolId: l.schoolId,
         territory: l.territory,
         currentStatus: l.currentStatus,
-        negotiatedPrice: l.negotiatedPrice || 0,
+        negotiatedPrice: toNGN(l.negotiatedPrice || 0, l.currency, rateMap),
+        originalCurrency: l.currency || 'NGN',
         probabilityOfClosing: l.probabilityOfClosing || 0,
-        weightedValue: (l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100),
+        weightedValue: toNGN(l.negotiatedPrice || 0, l.currency, rateMap) * ((l.probabilityOfClosing || 0) / 100),
         expectedClosingDate: l.expectedClosingDate,
         assignedTo: l.assignedTo
       }))

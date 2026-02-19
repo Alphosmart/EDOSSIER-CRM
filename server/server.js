@@ -8,6 +8,7 @@ const path = require('path');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { startReminderJob } = require('./jobs/reminderJob');
+const { seedDefaultRates } = require('./controllers/exchangeRateController');
 
 // Load env vars
 dotenv.config();
@@ -59,6 +60,7 @@ app.use('/api/activities', require('./routes/activities'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/exchange-rates', require('./routes/exchangeRates'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -74,4 +76,6 @@ app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
   // Start scheduled jobs
   startReminderJob();
+  // Seed exchange rates defaults if DB is empty
+  seedDefaultRates().catch(err => console.error('Exchange rate seed error:', err));
 });

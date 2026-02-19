@@ -22,8 +22,8 @@ const UserSchema = new mongoose.Schema({
     default: 'sales_rep'
   },
   territory: {
-    type: String,
-    enum: ['Kaduna', 'Abuja', 'Lagos', 'Other']
+    type: String
+    // Now stores any Nigerian state or country — no enum restriction
   },
   defaultCommissionRate: { type: Number, default: 25, min: 0, max: 100 },
   isActive: { type: Boolean, default: true },
@@ -68,7 +68,7 @@ UserSchema.methods.toJSON = function () {
   return user;
 };
 
-UserSchema.index({ email: 1 });
+// email has unique:true above — explicit UserSchema.index is not needed (would be duplicate)
 UserSchema.index({ role: 1 });
 UserSchema.index({ territory: 1 });
 

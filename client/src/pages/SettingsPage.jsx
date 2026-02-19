@@ -4,11 +4,13 @@ import { useSearchParams } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { userService } from '../services/userService';
 import toast from 'react-hot-toast';
-import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil } from 'react-icons/hi';
+import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil, HiOutlineGlobe, HiOutlineTrash } from 'react-icons/hi';
+import { exchangeRateService } from '../services/exchangeRateService';
 
 export default function SettingsPage() {
   const { user, hasRole } = useAuth();
   const isAdmin = hasRole('admin');
+  const canManageRates = hasRole('manager') || hasRole('admin');
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('profile');
 
@@ -24,6 +26,14 @@ export default function SettingsPage() {
   });
   const [loading, setLoading] = useState(false);
 
+  // Exchange rates state
+  const [exchangeRates, setExchangeRates] = useState([]);
+  const [exRatesLoading, setExRatesLoading] = useState(false);
+  const [editingExRate, setEditingExRate] = useState({}); // { currency: { rate, description } }
+  const [savingExRate, setSavingExRate] = useState({});
+  const [newRate, setNewRate] = useState({ currency: '', rate: '', description: '' });
+  const [addingNewRate, setAddingNewRate] = useState(false);
+
   // Commission rates state
   const [users, setUsers] = useState([]);
   const [ratesLoading, setRatesLoading] = useState(false);
@@ -34,7 +44,91 @@ export default function SettingsPage() {
     if (tab === 'commission' && isAdmin) {
       loadUsers();
     }
+    if (tab === 'exchangeRates' && canManageRates) {
+      loadExchangeRates();
+    }
   }, [tab]);
+
+  const loadExchangeRates = async () => {
+    setExRatesLoading(true);
+    try {
+      const { data } = await exchangeRateService.getRates();
+      setExchangeRates(data);
+    } catch {
+      toast.error('Failed to load exchange rates');
+    } finally {
+      setExRatesLoading(false);
+    }
+  };
+
+  const startEditExRate = (rate) => {
+    setEditingExRate(prev => ({
+      ...prev,
+      [rate.currency]: { rate: rate.rateToNGN, description: rate.description || '' }
+    }));
+  };
+
+  const cancelEditExRate = (currency) => {
+    setEditingExRate(prev => { const n = { ...prev }; delete n[currency]; return n; });
+  };
+
+  const saveExRate = async (currency) => {
+    const { rate, description } = editingExRate[currency];
+    const rateNum = parseFloat(rate);
+    if (isNaN(rateNum) || rateNum <= 0) {
+      toast.error('Rate must be a positive number');
+      return;
+    }
+    setSavingExRate(prev => ({ ...prev, [currency]: true }));
+    try {
+      await exchangeRateService.upsertRate(currency, rateNum, description);
+      setExchangeRates(prev => prev.map(r =>
+        r.currency === currency ? { ...r, rateToNGN: rateNum, description, lastUpdated: new Date() } : r
+      ));
+      cancelEditExRate(currency);
+      toast.success(`${currency} rate updated`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update rate');
+    } finally {
+      setSavingExRate(prev => ({ ...prev, [currency]: false }));
+    }
+  };
+
+  const deleteExRate = async (currency) => {
+    if (!window.confirm(`Remove ${currency} from exchange rates?`)) return;
+    try {
+      await exchangeRateService.deleteRate(currency);
+      setExchangeRates(prev => prev.filter(r => r.currency !== currency));
+      toast.success(`${currency} removed`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete rate');
+    }
+  };
+
+  const handleAddNewRate = async (e) => {
+    e.preventDefault();
+    const currency = newRate.currency.trim().toUpperCase();
+    const rateNum = parseFloat(newRate.rate);
+    if (!currency || currency.length < 2 || currency.length > 4) {
+      toast.error('Currency code must be 2–4 letters');
+      return;
+    }
+    if (isNaN(rateNum) || rateNum <= 0) {
+      toast.error('Rate must be a positive number');
+      return;
+    }
+    setAddingNewRate(true);
+    try {
+      await exchangeRateService.upsertRate(currency, rateNum, newRate.description);
+      await loadExchangeRates();
+      setNewRate({ currency: '', rate: '', description: '' });
+      toast.success(`${currency} rate added`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to add rate');
+    } finally {
+      setAddingNewRate(false);
+    }
+  };
 
   const loadUsers = async () => {
     setRatesLoading(true);
@@ -133,6 +227,16 @@ export default function SettingsPage() {
             }`}
           >
             <HiOutlineCurrencyDollar className="w-4 h-4" /> Commission Rates
+          </button>
+        )}
+        {canManageRates && (
+          <button
+            onClick={() => setTab('exchangeRates')}
+            className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
+              tab === 'exchangeRates' ? 'border-b-2 border-primary-600 text-primary-600' : 'text-gray-500'
+            }`}
+          >
+            <HiOutlineGlobe className="w-4 h-4" /> Exchange Rates
           </button>
         )}
       </div>
@@ -328,6 +432,170 @@ export default function SettingsPage() {
 
           <p className="text-xs text-gray-400">
             Note: Changing a user's default rate affects new leads only. Existing commission payouts are not retroactively updated.
+          </p>
+        </div>
+      )}
+
+      {/* ── Exchange Rates (admin + manager) ── */}
+      {tab === 'exchangeRates' && canManageRates && (
+        <div className="space-y-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Exchange Rates to NGN</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                All dashboard revenue figures are converted to NGN for aggregation. 1 NGN = 1 NGN.
+              </p>
+            </div>
+            <button onClick={loadExchangeRates} className="btn-secondary text-sm">Refresh</button>
+          </div>
+
+          {exRatesLoading ? (
+            <div className="card py-10 text-center text-gray-400">Loading…</div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-gray-500 uppercase text-xs">
+                    <th className="px-4 py-3 w-24">Currency</th>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3 w-44">Rate to NGN (1 unit)</th>
+                    <th className="px-4 py-3 w-36">Last Updated</th>
+                    <th className="px-4 py-3 w-32">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {exchangeRates.length === 0 && (
+                    <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-400">No rates found</td></tr>
+                  )}
+                  {exchangeRates.map(r => {
+                    const editing = editingExRate[r.currency];
+                    const saving = savingExRate[r.currency];
+                    return (
+                      <tr key={r.currency} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-bold text-primary-700">{r.currency}</td>
+                        <td className="px-4 py-3 text-gray-500">
+                          {editing ? (
+                            <input
+                              type="text"
+                              value={editing.description}
+                              onChange={e => setEditingExRate(prev => ({ ...prev, [r.currency]: { ...prev[r.currency], description: e.target.value } }))}
+                              className="input-field py-1 text-sm"
+                              placeholder="e.g. US Dollar"
+                            />
+                          ) : (r.description || '—')}
+                        </td>
+                        <td className="px-4 py-3">
+                          {editing ? (
+                            <input
+                              type="number"
+                              min="0.0001"
+                              step="any"
+                              value={editing.rate}
+                              onChange={e => setEditingExRate(prev => ({ ...prev, [r.currency]: { ...prev[r.currency], rate: e.target.value } }))}
+                              className="input-field w-32 py-1 text-sm"
+                              autoFocus
+                            />
+                          ) : (
+                            <span className="font-semibold">₦{r.rateToNGN?.toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-400">
+                          {r.lastUpdated ? new Date(r.lastUpdated).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {editing ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => saveExRate(r.currency)}
+                                disabled={saving}
+                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700 flex items-center gap-1"
+                              >
+                                <HiOutlineCheck className="w-3 h-3" />
+                                {saving ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                onClick={() => cancelEditExRate(r.currency)}
+                                className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => startEditExRate(r)}
+                                className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
+                              >
+                                <HiOutlinePencil className="w-3 h-3" /> Edit
+                              </button>
+                              {isAdmin && r.currency !== 'NGN' && (
+                                <button
+                                  onClick={() => deleteExRate(r.currency)}
+                                  className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 flex items-center gap-1"
+                                >
+                                  <HiOutlineTrash className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Add new rate */}
+          {isAdmin && (
+            <div className="card">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Add / Update Currency</h3>
+              <form onSubmit={handleAddNewRate} className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Code</label>
+                  <input
+                    type="text"
+                    placeholder="USD"
+                    maxLength={4}
+                    value={newRate.currency}
+                    onChange={e => setNewRate(prev => ({ ...prev, currency: e.target.value.toUpperCase() }))}
+                    className="input-field w-24 py-1.5 text-sm uppercase"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Rate to NGN</label>
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="any"
+                    placeholder="1650"
+                    value={newRate.rate}
+                    onChange={e => setNewRate(prev => ({ ...prev, rate: e.target.value }))}
+                    className="input-field w-32 py-1.5 text-sm"
+                    required
+                  />
+                </div>
+                <div className="flex-1 min-w-40">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                  <input
+                    type="text"
+                    placeholder="US Dollar"
+                    value={newRate.description}
+                    onChange={e => setNewRate(prev => ({ ...prev, description: e.target.value }))}
+                    className="input-field py-1.5 text-sm w-full"
+                  />
+                </div>
+                <button type="submit" className="btn-primary py-1.5 text-sm" disabled={addingNewRate}>
+                  {addingNewRate ? 'Saving…' : 'Add Rate'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400">
+            Rates are applied when aggregating multi-currency leads on the dashboard. NGN is always 1.00.
           </p>
         </div>
       )}
