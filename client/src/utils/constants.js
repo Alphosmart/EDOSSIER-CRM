@@ -22,7 +22,13 @@ export const ACTIVE_STATUSES = [
 // Kept for user assignment territory — now references Nigerian states
 export { NIGERIAN_STATES as TERRITORIES } from './nigerianStatesLgas';
 
-export const SCHOOL_TYPES = ['Private', 'Public', 'Primary', 'Secondary', 'Tertiary'];
+export const SCHOOL_TYPES = [
+  'Primary School',
+  'Secondary School',
+  'Tertiary Institution',
+  'Business',
+  'Hospital',
+];
 
 export const FOLLOW_UP_METHODS = ['Call', 'WhatsApp', 'Email', 'Physical Visit'];
 

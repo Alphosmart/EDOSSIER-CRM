@@ -154,7 +154,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
           <input name="schoolName" value={formData.schoolName} onChange={handleChange} required className="input-field" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">School Type</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Organisation Type</label>
           <select name="schoolType" value={formData.schoolType} onChange={handleChange} className="input-field">
             <option value="">Select Type</option>
             {SCHOOL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}

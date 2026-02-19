@@ -240,7 +240,7 @@ export default function LeadDetailPage() {
             <h3 className="text-lg font-semibold mb-4">School Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-gray-500">Type:</span>
+                <span className="text-gray-500">Organisation Type:</span>
                 <span className="ml-2 font-medium">{lead.schoolType || '—'}</span>
               </div>
               <div>
