@@ -402,8 +402,150 @@ function TargetCard({ target, actual, fmt, rateMap, displayCurrency }) {
 // Stats Comparison panel
 // ──────────────────────────────────────────────────────────────────────────────────
 function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShowCompare, runComparison, compareData, compareLoading, fmt }) {
-  const [mode, setMode] = useState('presets'); // 'presets' | 'custom'
-  const [activePreset, setActivePreset] = useState(null);
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = `${curYear}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonthDate = new Date(curYear, now.getMonth() - 1, 1);
+  const prevMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+  const curQ = Math.floor(now.getMonth() / 3);
+  const todayIso = now.toISOString().slice(0, 10);
+  const yest = new Date(now); yest.setDate(yest.getDate() - 1);
+  const yesterdayIso = yest.toISOString().slice(0, 10);
+  // ISO week string helper
+  const toIsoWeek = (d) => {
+    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+    const year = tmp.getUTCFullYear();
+    const startOfYear = new Date(Date.UTC(year, 0, 1));
+    const week = Math.ceil((((tmp - startOfYear) / 86400000) + 1) / 7);
+    return `${year}-W${String(week).padStart(2, '0')}`;
+  };
+  const lastWeekDate = new Date(now); lastWeekDate.setDate(lastWeekDate.getDate() - 7);
+
+  const [granularity, setGranularity] = useState('month');
+  // Picker values per granularity { day, week, month, quarter:{y,q}, year }
+  const [pickA, setPickA] = useState({ day: todayIso,     week: toIsoWeek(now),          month: curMonth,  quarter: { y: curYear,  q: curQ },                         year: curYear });
+  const [pickB, setPickB] = useState({ day: yesterdayIso, week: toIsoWeek(lastWeekDate), month: prevMonth, quarter: { y: curQ === 0 ? curYear - 1 : curYear, q: curQ === 0 ? 3 : curQ - 1 }, year: curYear - 1 });
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const iso = d => d.toISOString().slice(0, 10);
+
+  // Convert picker selection → { from, to }
+  const toRange = (gran, val) => {
+    if (gran === 'day') return { from: val, to: val };
+    if (gran === 'week') {
+      const [yr, wk] = val.split('-W').map(Number);
+      // ISO week Monday
+      const jan4 = new Date(yr, 0, 4);
+      const mon = new Date(jan4);
+      mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7) + (wk - 1) * 7);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      return { from: iso(mon), to: iso(sun) };
+    }
+    if (gran === 'month') {
+      const [y, m] = val.split('-').map(Number);
+      return { from: iso(new Date(y, m - 1, 1)), to: iso(new Date(y, m, 0)) };
+    }
+    if (gran === 'quarter') {
+      const { y, q } = val;
+      return { from: iso(new Date(y, q * 3, 1)), to: iso(new Date(y, q * 3 + 3, 0)) };
+    }
+    if (gran === 'year') {
+      return { from: iso(new Date(val, 0, 1)), to: iso(new Date(val, 11, 31)) };
+    }
+  };
+
+  // Human-readable label
+  const toLabel = (gran, val) => {
+    if (gran === 'day') return val;
+    if (gran === 'week') { const [yr, wk] = val.split('-W'); return `Wk ${wk}, ${yr}`; }
+    if (gran === 'month') { const [y, m] = val.split('-').map(Number); return `${MONTHS[m - 1]} ${y}`; }
+    if (gran === 'quarter') return `Q${val.q + 1} ${val.y}`;
+    if (gran === 'year') return `${val}`;
+  };
+
+  const handleCompare = () => {
+    const a = toRange(granularity, pickA[granularity]);
+    const b = toRange(granularity, pickB[granularity]);
+    setCompA(a); setCompB(b);
+    runComparison(a, b);
+  };
+
+  const GRAN_TABS = [
+    { key: 'day',     label: 'Day',     icon: '📅' },
+    { key: 'week',    label: 'Week',    icon: '📆' },
+    { key: 'month',   label: 'Month',   icon: '🗓️' },
+    { key: 'quarter', label: 'Quarter', icon: '📊' },
+    { key: 'year',    label: 'Year',    icon: '📈' },
+  ];
+
+  // Picker component per granularity
+  const Picker = ({ which }) => {
+    const val = which === 'A' ? pickA : pickB;
+    const setVal = which === 'A' ? setPickA : setPickB;
+    const upd = (key, v) => setVal(p => ({ ...p, [key]: v }));
+    const accent = which === 'A' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200';
+    const labelColor = which === 'A' ? 'text-blue-700' : 'text-gray-600';
+
+    return (
+      <div className={`rounded-xl border p-4 ${accent}`}>
+        <p className={`text-xs font-bold uppercase mb-3 ${labelColor}`}>
+          {which === 'A' ? 'Period A' : 'Period B'}
+          {val[granularity] && (
+            <span className={`ml-2 font-normal normal-case text-gray-400`}>
+              {toLabel(granularity, val[granularity])}
+            </span>
+          )}
+        </p>
+
+        {granularity === 'day' && (
+          <input type="date" value={val.day}
+            onChange={e => upd('day', e.target.value)}
+            className="input-field text-sm py-1.5 w-full" />
+        )}
+
+        {granularity === 'week' && (
+          <input type="week" value={val.week}
+            onChange={e => upd('week', e.target.value)}
+            className="input-field text-sm py-1.5 w-full" />
+        )}
+
+        {granularity === 'month' && (
+          <input type="month" value={val.month}
+            onChange={e => upd('month', e.target.value)}
+            className="input-field text-sm py-1.5 w-full" />
+        )}
+
+        {granularity === 'quarter' && (
+          <div className="space-y-2">
+            <input type="number" min="2015" max="2100"
+              value={val.quarter.y}
+              onChange={e => upd('quarter', { ...val.quarter, y: parseInt(e.target.value) || curYear })}
+              className="input-field text-sm py-1.5 w-full" placeholder="Year e.g. 2025" />
+            <div className="grid grid-cols-4 gap-1.5">
+              {[0,1,2,3].map(q => (
+                <button key={q}
+                  onClick={() => upd('quarter', { ...val.quarter, q })}
+                  className={`py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    val.quarter.q === q
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-primary-400'
+                  }`}>Q{q + 1}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {granularity === 'year' && (
+          <input type="number" min="2015" max="2100"
+            value={val.year}
+            onChange={e => upd('year', parseInt(e.target.value) || curYear)}
+            className="input-field text-sm py-1.5 w-full" placeholder="e.g. 2025" />
+        )}
+      </div>
+    );
+  };
 
   const METRICS = [
     { key: 'newLeads',        label: 'New Leads',       currency: false },
@@ -416,92 +558,6 @@ function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShow
     { key: 'avgDealSize',     label: 'Avg Deal Size',   currency: true },
   ];
 
-  // ── Date helpers ──
-  const iso = d => d.toISOString().slice(0, 10);
-
-  const buildPresets = () => {
-    const now = new Date();
-    const today = iso(now);
-
-    // Day
-    const yd = new Date(now); yd.setDate(yd.getDate() - 1);
-    const yesterday = iso(yd);
-
-    // Week (Mon-based)
-    const dow = (now.getDay() + 6) % 7; // 0=Mon
-    const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - dow);
-    const lastWeekStart = new Date(thisWeekStart); lastWeekStart.setDate(thisWeekStart.getDate() - 7);
-    const lastWeekEnd   = new Date(thisWeekStart); lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
-
-    // Month
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
-
-    // Quarter
-    const q = Math.floor(now.getMonth() / 3);
-    const thisQStart = new Date(now.getFullYear(), q * 3, 1);
-    const lastQStart = new Date(now.getFullYear(), q * 3 - 3, 1);
-    const lastQEnd   = new Date(now.getFullYear(), q * 3, 0);
-
-    // Year
-    const thisYearStart = new Date(now.getFullYear(), 0, 1);
-    const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
-    const lastYearEnd   = new Date(now.getFullYear() - 1, 11, 31);
-
-    return [
-      {
-        key: 'day',
-        label: 'Day',
-        sublabel: 'Today vs Yesterday',
-        a: { from: today,               to: today },
-        b: { from: yesterday,           to: yesterday },
-        labelA: 'Today', labelB: 'Yesterday',
-      },
-      {
-        key: 'week',
-        label: 'Week',
-        sublabel: 'This week vs Last week',
-        a: { from: iso(thisWeekStart),  to: today },
-        b: { from: iso(lastWeekStart),  to: iso(lastWeekEnd) },
-        labelA: 'This Week', labelB: 'Last Week',
-      },
-      {
-        key: 'month',
-        label: 'Month',
-        sublabel: 'This month vs Last month',
-        a: { from: iso(thisMonthStart), to: today },
-        b: { from: iso(lastMonthStart), to: iso(lastMonthEnd) },
-        labelA: 'This Month', labelB: 'Last Month',
-      },
-      {
-        key: 'quarter',
-        label: 'Quarter',
-        sublabel: `Q${q + 1} vs Q${q === 0 ? 4 : q}`,
-        a: { from: iso(thisQStart),     to: today },
-        b: { from: iso(lastQStart),     to: iso(lastQEnd) },
-        labelA: `Q${q + 1} ${now.getFullYear()}`, labelB: `Q${q === 0 ? 4 : q} ${q === 0 ? now.getFullYear() - 1 : now.getFullYear()}`,
-      },
-      {
-        key: 'year',
-        label: 'Year',
-        sublabel: `${now.getFullYear()} vs ${now.getFullYear() - 1}`,
-        a: { from: iso(thisYearStart),  to: today },
-        b: { from: iso(lastYearStart),  to: iso(lastYearEnd) },
-        labelA: `${now.getFullYear()}`, labelB: `${now.getFullYear() - 1}`,
-      },
-    ];
-  };
-
-  const handlePreset = (preset) => {
-    setActivePreset(preset.key);
-    setCompA(preset.a);
-    setCompB(preset.b);
-    runComparison(preset.a, preset.b);
-  };
-
-  const PRESETS = buildPresets();
-
   return (
     <div className="card">
       {/* Header toggle */}
@@ -512,9 +568,9 @@ function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShow
         <div className="flex items-center gap-2">
           <HiOutlineSwitchHorizontal className="w-5 h-5 text-primary-600" />
           <span className="font-semibold text-gray-800">Compare Periods</span>
-          {activePreset && !showCompare && (
-            <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">
-              {PRESETS.find(p => p.key === activePreset)?.label}
+          {!showCompare && (
+            <span className="text-xs text-gray-400 ml-1">
+              {toLabel(granularity, pickA[granularity])} vs {toLabel(granularity, pickB[granularity])}
             </span>
           )}
         </div>
@@ -522,93 +578,35 @@ function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShow
       </button>
 
       {showCompare && (
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-5">
 
-          {/* Mode tabs */}
-          <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
-            <button
-              onClick={() => setMode('presets')}
-              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-all ${
-                mode === 'presets' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              Quick Presets
-            </button>
-            <button
-              onClick={() => setMode('custom')}
-              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-all ${
-                mode === 'custom' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              Custom Dates
-            </button>
+          {/* Granularity selector */}
+          <div className="flex flex-wrap gap-2">
+            {GRAN_TABS.map(g => (
+              <button
+                key={g.key}
+                onClick={() => setGranularity(g.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                  granularity === g.key
+                    ? 'bg-primary-600 text-white border-primary-600 shadow'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-primary-400 hover:text-primary-600'
+                }`}
+              >
+                <span>{g.icon}</span> {g.label}
+              </button>
+            ))}
           </div>
 
-          {/* ── Quick Presets ── */}
-          {mode === 'presets' && (
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              {PRESETS.map(preset => (
-                <button
-                  key={preset.key}
-                  onClick={() => handlePreset(preset)}
-                  disabled={compareLoading}
-                  className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
-                    activePreset === preset.key
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50 text-gray-600'
-                  }`}
-                >
-                  <span className="text-base font-bold">
-                    {preset.key === 'day'     ? '📅' :
-                     preset.key === 'week'    ? '📆' :
-                     preset.key === 'month'   ? '🗓️' :
-                     preset.key === 'quarter' ? '📊' : '📈'}
-                  </span>
-                  <span className="text-sm font-semibold mt-1">{preset.label}</span>
-                  <span className="text-[10px] text-center text-gray-400 mt-0.5 leading-tight">{preset.sublabel}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Period pickers */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Picker which="A" />
+            <Picker which="B" />
+          </div>
 
-          {/* ── Custom Dates ── */}
-          {mode === 'custom' && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-blue-50 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Period A (Current)</p>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-gray-500 w-8">From</label>
-                      <input type="date" value={compA.from} onChange={e => setCompA(p => ({...p, from: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-gray-500 w-8">To</label>
-                      <input type="date" value={compA.to} onChange={e => setCompA(p => ({...p, to: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Period B (Compare to)</p>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-gray-500 w-8">From</label>
-                      <input type="date" value={compB.from} onChange={e => setCompB(p => ({...p, from: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-gray-500 w-8">To</label>
-                      <input type="date" value={compB.to} onChange={e => setCompB(p => ({...p, to: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => { setActivePreset(null); runComparison(); }}
-                disabled={compareLoading}
-                className="btn-primary text-sm"
-              >
-                {compareLoading ? 'Comparing…' : '📊 Run Comparison'}
-              </button>
-            </div>
-          )}
+          {/* Compare button */}
+          <button onClick={handleCompare} disabled={compareLoading} className="btn-primary text-sm">
+            {compareLoading ? 'Comparing…' : '📊 Compare'}
+          </button>
 
           {/* ── Loading ── */}
           {compareLoading && (
