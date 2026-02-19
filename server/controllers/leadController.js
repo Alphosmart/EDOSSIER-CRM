@@ -98,19 +98,34 @@ exports.createLead = async (req, res) => {
   try {
     const leadData = { ...req.body };
 
-    // Default assignment to current user if not specified
-    if (!leadData.assignedTo) {
+    // Sales reps always own the leads they create — ignore any submitted assignedTo
+    if (!['admin', 'manager'].includes(req.user.role)) {
+      leadData.assignedTo = req.user._id;
+    } else if (!leadData.assignedTo) {
+      // Admin/manager: default to themselves if not specified
       leadData.assignedTo = req.user._id;
     }
 
-    // Default territory from user if not set
+    // Default territory from assigned user's territory if not set
     if (!leadData.territory && req.user.territory) {
       leadData.territory = req.user.territory;
     }
 
-    // Default commission rate from user
-    if (!leadData.commissionPercentage) {
-      leadData.commissionPercentage = req.user.defaultCommissionRate;
+    // Commission rate:
+    // - Reps always get their own default rate (they can't self-inflate)
+    // - Admin/manager: if creating on behalf of another user, pull that user's default rate
+    //   unless they explicitly set one
+    if (!['admin', 'manager'].includes(req.user.role)) {
+      leadData.commissionPercentage = req.user.defaultCommissionRate || 25;
+    } else if (!leadData.commissionPercentage) {
+      // Look up the assigned user's rate if different from the creator
+      const assignedUserId = leadData.assignedTo?.toString();
+      if (assignedUserId && assignedUserId !== req.user._id.toString()) {
+        const assignedUser = await require('../models/User').findById(assignedUserId).select('defaultCommissionRate');
+        leadData.commissionPercentage = assignedUser?.defaultCommissionRate || req.user.defaultCommissionRate || 25;
+      } else {
+        leadData.commissionPercentage = req.user.defaultCommissionRate || 25;
+      }
     }
 
     // Duplicate detection: same school name in same territory/LGA
