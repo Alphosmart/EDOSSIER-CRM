@@ -7,7 +7,8 @@ import {
 } from '../../utils/constants';
 import { NIGERIAN_STATES, getLgasByState } from '../../utils/nigerianStatesLgas';
 import { COUNTRY_NAMES, getCurrencyByCountry, isNigeria } from '../../utils/countries';
-import { getCurrencySymbol } from '../../utils/formatCurrency';
+import { getCurrencySymbol, formatCurrency } from '../../utils/formatCurrency';
+import { getCachedRateMap, convertToUSD } from '../../services/exchangeRateService';
 
 const initialFormData = {
   schoolName: '', schoolType: '', address: '', city: '', state: '',
@@ -35,8 +36,10 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
   const isAdminOrManager = hasRole('admin', 'manager');
   const [formData, setFormData] = useState(initialFormData);
   const [loading, setLoading] = useState(false);
+  const [rateMap, setRateMap] = useState(null);
 
-  useEffect(() => {
+  // Load exchange rates once for live USD conversion hints
+  useEffect(() => { getCachedRateMap().then(setRateMap); }, []);
     if (lead) {
       const data = { ...initialFormData };
       Object.keys(data).forEach(key => {
@@ -87,6 +90,18 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper: show ≈ $X USD hint when price is non-USD currency
+  const usdPreview = (amount) => {
+    if (!rateMap || !amount || formData.currency === 'USD') return null;
+    const n = Number(amount);
+    if (!n) return null;
+    return (
+      <p className="text-xs text-blue-500 mt-0.5">
+        ≈ {formatCurrency(convertToUSD(n, formData.currency, rateMap), 'USD')}
+      </p>
+    );
   };
 
   const Section = ({ title, children }) => (
@@ -301,10 +316,12 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Price ({getCurrencySymbol(formData.currency)})</label>
           <input type="number" name="proposedPrice" value={formData.proposedPrice} onChange={handleChange} className="input-field" />
+          {usdPreview(formData.proposedPrice)}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Negotiated Price ({getCurrencySymbol(formData.currency)})</label>
           <input type="number" name="negotiatedPrice" value={formData.negotiatedPrice} onChange={handleChange} className="input-field" />
+          {usdPreview(formData.negotiatedPrice)}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Expected Closing Date</label>
@@ -323,7 +340,10 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid ({getCurrencySymbol(formData.currency)})</label>
           {isAdminOrManager ? (
-            <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} className="input-field" />
+            <>
+              <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} className="input-field" />
+              {usdPreview(formData.amountPaid)}
+            </>
           ) : (
             <input type="number" value={formData.amountPaid} disabled className="input-field bg-gray-100 cursor-not-allowed" />
           )}

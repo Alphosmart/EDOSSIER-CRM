@@ -7,7 +7,8 @@ import ActivityTimeline from '../components/leads/ActivityTimeline';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
-import { formatCurrency, formatNaira } from '../utils/formatCurrency';
+import { formatCurrency } from '../utils/formatCurrency';
+import { getCachedRateMap, convertToUSD } from '../services/exchangeRateService';
 import { formatDate, isOverdue } from '../utils/formatDate';
 import toast from 'react-hot-toast';
 import {
@@ -36,10 +37,12 @@ export default function LeadDetailPage() {
   // Attachment state
   const [attachmentLoading, setAttachmentLoading] = useState(false);
   const attachmentInputRef = useRef(null);
+  const [rateMap, setRateMap] = useState(null);
 
   useEffect(() => {
     loadLead();
     loadActivities();
+    getCachedRateMap().then(setRateMap);
   }, [id]);
 
   const loadLead = async () => {
@@ -134,6 +137,14 @@ export default function LeadDetailPage() {
   if (loading) return <LoadingSpinner size="lg" />;
   if (!lead) return null;
 
+  const cur = lead.currency || 'NGN';
+  // Show USD equivalent in grey when lead's currency is not USD
+  const usdHint = (amount) => {
+    if (!rateMap || !amount || cur === 'USD') return null;
+    const usd = convertToUSD(amount, cur, rateMap);
+    return <span className="text-xs text-gray-400 ml-1">(≈ {formatCurrency(usd, 'USD')})</span>;
+  };
+
   const overdueFollowUp = lead.nextFollowUpDate && isOverdue(lead.nextFollowUpDate) &&
     !['Closed Won', 'Closed Lost', 'Not Interested'].includes(lead.currentStatus);
 
@@ -193,7 +204,8 @@ export default function LeadDetailPage() {
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Deal Value</p>
                 <p className="text-lg font-bold text-gray-900 mt-1">
-                  {formatNaira(lead.negotiatedPrice || lead.proposedPrice)}
+                  {formatCurrency(lead.negotiatedPrice || lead.proposedPrice, cur)}
+                  {usdHint(lead.negotiatedPrice || lead.proposedPrice)}
                 </p>
               </div>
               <div>
@@ -311,11 +323,13 @@ export default function LeadDetailPage() {
               </div>
               <div>
                 <span className="text-gray-500">Proposed Price:</span>
-                <span className="ml-2">{formatCurrency(lead.proposedPrice, lead.currency || 'NGN')}</span>
+                <span className="ml-2">{formatCurrency(lead.proposedPrice, cur)}</span>
+                {usdHint(lead.proposedPrice)}
               </div>
               <div>
                 <span className="text-gray-500">Negotiated Price:</span>
-                <span className="ml-2 font-bold">{formatCurrency(lead.negotiatedPrice, lead.currency || 'NGN')}</span>
+                <span className="ml-2 font-bold">{formatCurrency(lead.negotiatedPrice, cur)}</span>
+                {usdHint(lead.negotiatedPrice)}
               </div>
               <div>
                 <span className="text-gray-500">Payment Status:</span>
@@ -327,13 +341,15 @@ export default function LeadDetailPage() {
               {lead.amountPaid > 0 && (
                 <div>
                   <span className="text-gray-500">Amount Paid:</span>
-                  <span className="ml-2">{formatCurrency(lead.amountPaid, lead.currency || 'NGN')}</span>
+                  <span className="ml-2">{formatCurrency(lead.amountPaid, cur)}</span>
+                  {usdHint(lead.amountPaid)}
                 </div>
               )}
               {(lead.negotiatedPrice || 0) - (lead.amountPaid || 0) > 0 && (
                 <div>
                   <span className="text-gray-500">Outstanding:</span>
-                  <span className="ml-2 text-red-600 font-medium">{formatCurrency((lead.negotiatedPrice || 0) - (lead.amountPaid || 0), lead.currency || 'NGN')}</span>
+                  <span className="ml-2 text-red-600 font-medium">{formatCurrency((lead.negotiatedPrice || 0) - (lead.amountPaid || 0), cur)}</span>
+                  {usdHint((lead.negotiatedPrice || 0) - (lead.amountPaid || 0))}
                 </div>
               )}
               <div>

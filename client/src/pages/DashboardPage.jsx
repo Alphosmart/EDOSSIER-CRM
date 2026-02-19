@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { dashboardService } from '../services/dashboardService';
 import { leadService } from '../services/leadService';
 import { useAuth } from '../context/AuthContext';
-import { formatNaira } from '../utils/formatCurrency';
+import { formatCurrency } from '../utils/formatCurrency';
 import KPICard from '../components/dashboard/KPICard';
 import PipelineChart from '../components/dashboard/PipelineChart';
 import RevenueChart from '../components/dashboard/RevenueChart';
@@ -125,16 +125,16 @@ export default function DashboardPage() {
 
         {/* Row 1 – Revenue & Deals */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard title="Total Revenue" value={formatNaira(kpis?.totalClosedRevenue)} subtitle={`${kpis?.totalClosedWon || 0} deals closed`} icon={HiOutlineCurrencyDollar} color="green" />
-          <KPICard title="Pipeline Value" value={formatNaira(kpis?.activePipelineValue)} subtitle={`${kpis?.totalLeadsInPipeline || 0} active leads`} icon={HiOutlineUserGroup} color="primary" />
-          <KPICard title="Weighted Forecast" value={formatNaira(kpis?.weightedForecast)} subtitle="Probability-adjusted" icon={HiOutlineTrendingUp} color="indigo" />
-          <KPICard title="Avg Deal Size" value={formatNaira(kpis?.averageDealSize)} icon={HiOutlineChartBar} color="pink" />
+          <KPICard title="Total Revenue" value={formatCurrency(kpis?.totalClosedRevenue, 'USD')} subtitle={`${kpis?.totalClosedWon || 0} deals closed`} icon={HiOutlineCurrencyDollar} color="green" />
+          <KPICard title="Pipeline Value" value={formatCurrency(kpis?.activePipelineValue, 'USD')} subtitle={`${kpis?.totalLeadsInPipeline || 0} active leads`} icon={HiOutlineUserGroup} color="primary" />
+          <KPICard title="Weighted Forecast" value={formatCurrency(kpis?.weightedForecast, 'USD')} subtitle="Probability-adjusted" icon={HiOutlineTrendingUp} color="indigo" />
+          <KPICard title="Avg Deal Size" value={formatCurrency(kpis?.averageDealSize, 'USD')} icon={HiOutlineChartBar} color="pink" />
         </div>
 
         {/* Row 2 – Performance & Commission */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard title="Win Rate" value={`${kpis?.winRate || 0}%`} subtitle={`${kpis?.totalClosedWon || 0}W / ${kpis?.totalClosedLost || 0}L`} icon={HiOutlineCheckCircle} color="purple" />
-          <KPICard title="Total Commission Paid" value={formatNaira(kpis?.totalCommissionEarned)} icon={HiOutlineLightningBolt} color="yellow" />
+          <KPICard title="Total Commission Paid" value={formatCurrency(kpis?.totalCommissionEarned, 'USD')} icon={HiOutlineLightningBolt} color="yellow" />
           <KPICard title="Overdue Follow-ups" value={kpis?.overdueFollowUps || 0} icon={HiOutlineExclamation} color={kpis?.overdueFollowUps > 0 ? 'red' : 'green'} />
           <KPICard title="Due Today" value={kpis?.followUpsDueToday || 0} icon={HiOutlineCalendar} color="orange" />
         </div>
@@ -240,9 +240,9 @@ export default function DashboardPage() {
 
       {/* Row 1 – Personal KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard title="My Pipeline" value={kpis?.totalLeadsInPipeline || 0} subtitle={`Value: ${formatNaira(kpis?.activePipelineValue)}`} icon={HiOutlineClipboardList} color="primary" />
-        <KPICard title="My Revenue" value={formatNaira(kpis?.totalClosedRevenue)} subtitle={`${kpis?.totalClosedWon || 0} deals closed`} icon={HiOutlineCurrencyDollar} color="green" />
-        <KPICard title="My Commission" value={formatNaira(kpis?.totalCommissionEarned)} icon={HiOutlineLightningBolt} color="yellow" />
+        <KPICard title="My Pipeline" value={kpis?.totalLeadsInPipeline || 0} subtitle={`Value: ${formatCurrency(kpis?.activePipelineValue, 'USD')}`} icon={HiOutlineClipboardList} color="primary" />
+        <KPICard title="My Revenue" value={formatCurrency(kpis?.totalClosedRevenue, 'USD')} subtitle={`${kpis?.totalClosedWon || 0} deals closed`} icon={HiOutlineCurrencyDollar} color="green" />
+        <KPICard title="My Commission" value={formatCurrency(kpis?.totalCommissionEarned, 'USD')} icon={HiOutlineLightningBolt} color="yellow" />
         <KPICard title="Win Rate" value={`${kpis?.winRate || 0}%`} subtitle={`${kpis?.totalClosedWon || 0}W / ${kpis?.totalClosedLost || 0}L`} icon={HiOutlineCheckCircle} color="purple" />
       </div>
 
@@ -250,8 +250,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard title="Overdue Follow-ups" value={kpis?.overdueFollowUps || 0} icon={HiOutlineExclamation} color={kpis?.overdueFollowUps > 0 ? 'red' : 'green'} />
         <KPICard title="Due Today" value={kpis?.followUpsDueToday || 0} icon={HiOutlineCalendar} color="orange" />
-        <KPICard title="Weighted Forecast" value={formatNaira(kpis?.weightedForecast)} subtitle="Probability-adjusted" icon={HiOutlineTrendingUp} color="indigo" />
-        <KPICard title="Avg Deal Size" value={formatNaira(kpis?.averageDealSize)} icon={HiOutlineChartBar} color="pink" />
+        <KPICard title="Weighted Forecast" value={formatCurrency(kpis?.weightedForecast, 'USD')} subtitle="Probability-adjusted" icon={HiOutlineTrendingUp} color="indigo" />
+        <KPICard title="Avg Deal Size" value={formatCurrency(kpis?.averageDealSize, 'USD')} icon={HiOutlineChartBar} color="pink" />
       </div>
 
       {/* Charts – Pipeline & Follow-ups */}

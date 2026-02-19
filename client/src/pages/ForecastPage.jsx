@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { dashboardService } from '../services/dashboardService';
-import { formatNaira } from '../utils/formatCurrency';
+import { formatCurrency } from '../utils/formatCurrency';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import StatusBadge from '../components/common/StatusBadge';
 import toast from 'react-hot-toast';
@@ -58,28 +58,28 @@ export default function ForecastPage() {
   const kpis = [
     {
       label: 'Weighted Pipeline',
-      value: formatNaira(weightedPipeline),
+      value: formatCurrency(weightedPipeline, 'USD'),
       sub: `${data.totalActivePipeline || 0} active deals`,
       icon: HiOutlineChartBar,
       color: 'bg-blue-50 text-blue-600'
     },
     {
       label: 'Total Pipeline Value',
-      value: formatNaira(totalPipelineValue),
+      value: formatCurrency(totalPipelineValue, 'USD'),
       sub: 'Negotiated prices',
       icon: HiOutlineCurrencyDollar,
       color: 'bg-green-50 text-green-600'
     },
     {
       label: 'Expected This Month',
-      value: formatNaira(expectedThisMonth),
+      value: formatCurrency(expectedThisMonth, 'USD'),
       sub: `${thisMonthCount} deal${thisMonthCount !== 1 ? 's' : ''} closing`,
       icon: HiOutlineCalendar,
       color: 'bg-purple-50 text-purple-600'
     },
     {
       label: 'Expected Next Month',
-      value: formatNaira(expectedNextMonth),
+      value: formatCurrency(expectedNextMonth, 'USD'),
       sub: `${nextMonthCount} deal${nextMonthCount !== 1 ? 's' : ''} in pipeline`,
       icon: HiOutlineTrendingUp,
       color: 'bg-indigo-50 text-indigo-600'
@@ -129,14 +129,14 @@ export default function ForecastPage() {
                 <XAxis
                   type="number"
                   tickFormatter={(v) =>
-                    v >= 1_000_000 ? `₦${(v / 1_000_000).toFixed(1)}M` : `₦${(v / 1_000).toFixed(0)}K`
+                    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${(v / 1_000).toFixed(0)}K`
                   }
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis type="category" dataKey="status" width={115} tick={{ fontSize: 11 }} />
                 <Tooltip
                   formatter={(v, name) => [
-                    formatNaira(v),
+                    formatCurrency(v, 'USD'),
                     name === 'weightedValue' ? 'Weighted Value' : 'Total Value'
                   ]}
                 />
@@ -180,9 +180,9 @@ export default function ForecastPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right font-bold">{s.count}</td>
-                      <td className="px-4 py-3 text-right">{formatNaira(s.totalValue)}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrency(s.totalValue, 'USD')}</td>
                       <td className="px-4 py-3 text-right text-gray-500">{prob}%</td>
-                      <td className="px-4 py-3 text-right font-bold text-primary-600">{formatNaira(s.weightedValue)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-primary-600">{formatCurrency(s.weightedValue, 'USD')}</td>
                     </tr>
                   );
                 })}
@@ -193,9 +193,9 @@ export default function ForecastPage() {
                   <td className="px-4 py-3 text-right">
                     {(data.byStage || []).reduce((s, r) => s + r.count, 0)}
                   </td>
-                  <td className="px-4 py-3 text-right">{formatNaira(totalPipelineValue)}</td>
+                  <td className="px-4 py-3 text-right">{formatCurrency(totalPipelineValue, 'USD')}</td>
                   <td className="px-4 py-3 text-right">—</td>
-                  <td className="px-4 py-3 text-right text-primary-600">{formatNaira(weightedPipeline)}</td>
+                  <td className="px-4 py-3 text-right text-primary-600">{formatCurrency(weightedPipeline, 'USD')}</td>
                 </tr>
               </tfoot>
             </table>
@@ -244,13 +244,13 @@ export default function ForecastPage() {
                         : '—'}
                     </td>
                     <td className="px-4 py-3 text-right font-bold">
-                      {formatNaira(p.negotiatedPrice || 0)}
+                      {formatCurrency(p.negotiatedPrice || 0, 'USD')}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500">
                       {p.probabilityOfClosing || 0}%
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-primary-600">
-                      {formatNaira(p.weightedValue)}
+                      {formatCurrency(p.weightedValue, 'USD')}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {p.expectedClosingDate
@@ -279,7 +279,7 @@ export default function ForecastPage() {
                 Closed Revenue (period)
               </p>
               <p className="text-2xl font-bold text-green-800">
-                {formatNaira(data.totalClosedRevenue)}
+                {formatCurrency(data.totalClosedRevenue, 'USD')}
               </p>
             </div>
           </div>
