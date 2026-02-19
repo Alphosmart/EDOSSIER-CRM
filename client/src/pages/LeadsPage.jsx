@@ -5,7 +5,8 @@ import LeadCard from '../components/leads/LeadCard';
 import LeadStatusDropdown from '../components/leads/LeadStatusDropdown';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Pagination from '../components/common/Pagination';
-import { LEAD_STATUSES, TERRITORIES } from '../utils/constants';
+import { LEAD_STATUSES } from '../utils/constants';
+import { NIGERIAN_STATES } from '../utils/nigerianStatesLgas';
 import { formatNaira } from '../utils/formatCurrency';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
@@ -255,8 +256,8 @@ export default function LeadsPage() {
             onChange={(e) => { setTerritoryFilter(e.target.value); setPage(1); }}
             className="input-field w-auto"
           >
-            <option value="">All Territories</option>
-            {TERRITORIES.map(t => <option key={t} value={t}>{t}</option>)}
+            <option value="">All States</option>
+            {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <div className="flex border rounded-lg overflow-hidden">
             <button

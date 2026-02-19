@@ -86,16 +86,18 @@ exports.getTerritoryReport = async (req, res) => {
     const leads = await Lead.find(filter)
       .populate('assignedTo', 'firstName lastName territory');
 
-    const territories = ['Kaduna', 'Abuja', 'Lagos', 'Other'];
+    // Derive distinct states from actual data
+    const stateSet = new Set(leads.map(l => l.territory || l.state).filter(Boolean));
+    const states = [...stateSet].sort();
 
-    const report = territories.map(territory => {
-      const tLeads = leads.filter(l => l.territory === territory);
+    const report = states.map(state => {
+      const tLeads = leads.filter(l => (l.territory || l.state) === state);
       const tClosedWon = tLeads.filter(l => l.currentStatus === 'Closed Won');
       const tClosedLost = tLeads.filter(l => l.currentStatus === 'Closed Lost');
       const tTotalClosed = tClosedWon.length + tClosedLost.length;
 
       return {
-        territory,
+        territory: state,
         totalLeads: tLeads.length,
         closedWon: tClosedWon.length,
         closedLost: tClosedLost.length,

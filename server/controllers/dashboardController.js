@@ -30,7 +30,8 @@ const filterByRole = (user, fromDate, toDate) => {
 // @access  Private
 exports.getKPIs = async (req, res) => {
   try {
-    const { from, to } = req.query;\n    const filter = filterByRole(req.user, from, to);
+    const { from, to } = req.query;
+    const filter = filterByRole(req.user, from, to);
     const leads = await Lead.find(filter);
 
     const activeStatuses = [
@@ -97,7 +98,8 @@ exports.getKPIs = async (req, res) => {
 // @access  Private
 exports.getPipeline = async (req, res) => {
   try {
-    const { from, to } = req.query;\n    const filter = filterByRole(req.user, from, to);
+    const { from, to } = req.query;
+    const filter = filterByRole(req.user, from, to);
     const leads = await Lead.find(filter);
 
     const statuses = [
@@ -125,7 +127,8 @@ exports.getPipeline = async (req, res) => {
 // @access  Private
 exports.getRevenue = async (req, res) => {
   try {
-    const { from, to } = req.query;\n    const filter = filterByRole(req.user, from, to);
+    const { from, to } = req.query;
+    const filter = filterByRole(req.user, from, to);
     const leads = await Lead.find(filter);
 
     const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
@@ -176,7 +179,8 @@ exports.getRevenue = async (req, res) => {
 // @access  Private
 exports.getMonthly = async (req, res) => {
   try {
-    const { from, to } = req.query;\n    const filter = filterByRole(req.user, from, to);
+    const { from, to } = req.query;
+    const filter = filterByRole(req.user, from, to);
     const leads = await Lead.find(filter).populate('assignedTo', 'firstName lastName');
 
     const now = new Date();
@@ -209,25 +213,28 @@ exports.getMonthly = async (req, res) => {
 // @access  Private
 exports.getTerritory = async (req, res) => {
   try {
-    const { from, to } = req.query;\n    const filter = filterByRole(req.user, from, to);
+    const { from, to } = req.query;
+    const filter = filterByRole(req.user, from, to);
     const leads = await Lead.find(filter);
 
-    const territories = ['Kaduna', 'Abuja', 'Lagos', 'Other'];
+    // Derive distinct states dynamically from actual lead data
+    const stateSet = new Set(leads.map(l => l.territory || l.state).filter(Boolean));
+    const states = [...stateSet].sort();
 
-    const summary = territories.map(territory => {
-      const tLeads = leads.filter(l => l.territory === territory);
-      const tClosedWon = tLeads.filter(l => l.currentStatus === 'Closed Won');
-      const tActive = tLeads.filter(l =>
+    const summary = states.map(state => {
+      const sLeads = leads.filter(l => (l.territory || l.state) === state);
+      const sClosedWon = sLeads.filter(l => l.currentStatus === 'Closed Won');
+      const sActive = sLeads.filter(l =>
         !['Closed Won', 'Closed Lost', 'Not Interested'].includes(l.currentStatus)
       );
 
       return {
-        territory,
-        totalLeads: tLeads.length,
-        activeLeads: tActive.length,
-        closedWon: tClosedWon.length,
-        revenue: tClosedWon.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0),
-        pipelineValue: tActive.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0)
+        territory: state,
+        totalLeads: sLeads.length,
+        activeLeads: sActive.length,
+        closedWon: sClosedWon.length,
+        revenue: sClosedWon.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0),
+        pipelineValue: sActive.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0)
       };
     });
 
@@ -242,7 +249,8 @@ exports.getTerritory = async (req, res) => {
 // @access  Private
 exports.getForecast = async (req, res) => {
   try {
-    const { from, to } = req.query;\n    const filter = filterByRole(req.user, from, to);
+    const { from, to } = req.query;
+    const filter = filterByRole(req.user, from, to);
     const leads = await Lead.find(filter).populate('assignedTo', 'firstName lastName territory');
 
     const activeStatuses = [
@@ -332,7 +340,8 @@ exports.getForecast = async (req, res) => {
 // @access  Private
 exports.getMonthlyPerformance = async (req, res) => {
   try {
-    const { from, to } = req.query;\n    const filter = filterByRole(req.user, from, to);
+    const { from, to } = req.query;
+    const filter = filterByRole(req.user, from, to);
     const leads = await Lead.find(filter);
 
     const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');

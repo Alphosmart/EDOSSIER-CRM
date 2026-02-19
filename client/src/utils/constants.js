@@ -19,7 +19,8 @@ export const ACTIVE_STATUSES = [
   'Negotiation'
 ];
 
-export const TERRITORIES = ['Kaduna', 'Abuja', 'Lagos', 'Other'];
+// Kept for user assignment territory — now references Nigerian states
+export { NIGERIAN_STATES as TERRITORIES } from './nigerianStatesLgas';
 
 export const SCHOOL_TYPES = ['Private', 'Public', 'Primary', 'Secondary', 'Tertiary'];
 

@@ -3,7 +3,8 @@ import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
-import { ROLES, ROLE_LABELS, TERRITORIES } from '../utils/constants';
+import { ROLES, ROLE_LABELS } from '../utils/constants';
+import { NIGERIAN_STATES } from '../utils/nigerianStatesLgas';
 import toast from 'react-hot-toast';
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineEye } from 'react-icons/hi';
 
@@ -239,15 +240,15 @@ export default function UsersPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Territory</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Territory (State)</label>
               <select
                 value={form.territory}
                 onChange={e => setForm(p => ({ ...p, territory: e.target.value }))}
                 className="input-field"
               >
-                <option value="">Select...</option>
-                {TERRITORIES.map(t => (
-                  <option key={t} value={t}>{t}</option>
+                <option value="">Any State</option>
+                {NIGERIAN_STATES.map(s => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
             </div>

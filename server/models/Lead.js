@@ -84,11 +84,8 @@ const LeadSchema = new mongoose.Schema({
   commissionPercentage: { type: Number, default: 25, min: 0, max: 100 },
   commissionAmount: { type: Number, default: 0 },
 
-  // Territory & Assignment
-  territory: {
-    type: String,
-    enum: ['Kaduna', 'Abuja', 'Lagos', 'Other']
-  },
+  // Territory & Assignment (Nigerian state name)
+  territory: { type: String },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   lga: { type: String },
 

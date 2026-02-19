@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
-  LEAD_STATUSES, TERRITORIES, SCHOOL_TYPES,
+  LEAD_STATUSES, SCHOOL_TYPES,
   FOLLOW_UP_METHODS, PAYMENT_STATUSES,
   SUBSCRIPTION_TYPES, SUBSCRIPTION_PLANS, STORAGE_SIZES
 } from '../../utils/constants';
+import { NIGERIAN_STATES, getLgasByState } from '../../utils/nigerianStatesLgas';
 
 const initialFormData = {
   schoolName: '', schoolType: '', address: '', city: '', state: '',
@@ -116,7 +117,36 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-          <input name="state" value={formData.state} onChange={handleChange} className="input-field" />
+          <select
+            name="state"
+            value={formData.state}
+            onChange={e => {
+              const selectedState = e.target.value;
+              setFormData(prev => ({
+                ...prev,
+                state: selectedState,
+                territory: selectedState,
+                lga: ''
+              }));
+            }}
+            className="input-field"
+          >
+            <option value="">Select State</option>
+            {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">LGA</label>
+          <select
+            name="lga"
+            value={formData.lga}
+            onChange={handleChange}
+            className="input-field"
+            disabled={!formData.state}
+          >
+            <option value="">{formData.state ? 'Select LGA' : 'Select state first'}</option>
+            {getLgasByState(formData.state).map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
@@ -268,17 +298,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
             <p className="text-xs text-gray-400 mt-1">Set by admin</p>
           </div>
         )}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Territory</label>
-          <select name="territory" value={formData.territory} onChange={handleChange} className="input-field">
-            <option value="">Select Territory</option>
-            {TERRITORIES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">LGA</label>
-          <input name="lga" value={formData.lga} onChange={handleChange} className="input-field" placeholder="Local Government Area" />
-        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Relationship Strength (1-5)</label>
           <input type="number" min="1" max="5" name="relationshipStrength" value={formData.relationshipStrength} onChange={handleChange} className="input-field" />
