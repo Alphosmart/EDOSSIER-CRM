@@ -90,8 +90,20 @@ export default function CommissionsPage() {
   const [filter, setFilter] = useState('all');
   const [tab, setTab] = useState('list');
   const [disburseTarget, setDisburseTarget] = useState(null);
-  const [displayCurrency, setDisplayCurrency] = useState('USD'); // 'USD' | 'NGN'
   const [rateMap, setRateMap] = useState({ NGN: 1, USD: 1650 });
+
+  // Default: sales reps see NGN (their payout currency), managers/admins see USD.
+  // Persisted per user in localStorage so manual overrides survive page refresh.
+  const storageKey = user ? `commissionCurrency_${user._id}` : 'commissionCurrency';
+  const defaultCurrency = isManagerOrAdmin ? 'USD' : 'NGN';
+  const [displayCurrency, setDisplayCurrency] = useState(
+    () => localStorage.getItem(storageKey) || defaultCurrency
+  );
+
+  const toggleCurrency = (c) => {
+    setDisplayCurrency(c);
+    localStorage.setItem(storageKey, c);
+  };
 
   useEffect(() => {
     loadData();
@@ -193,14 +205,14 @@ export default function CommissionsPage() {
           {/* Currency toggle */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
             <button
-              onClick={() => setDisplayCurrency('USD')}
+              onClick={() => toggleCurrency('USD')}
               className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
                 displayCurrency === 'USD' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
               }`}>
               $ USD
             </button>
             <button
-              onClick={() => setDisplayCurrency('NGN')}
+              onClick={() => toggleCurrency('NGN')}
               className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
                 displayCurrency === 'NGN' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
               }`}>
