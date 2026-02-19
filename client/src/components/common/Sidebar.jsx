@@ -7,14 +7,20 @@ import {
   HiOutlineChartBar,
   HiOutlineCog,
   HiOutlineUsers,
-  HiOutlineX
+  HiOutlineX,
+  HiOutlineRefresh,
+  HiOutlineTrendingUp,
+  HiOutlineCalendar
 } from 'react-icons/hi';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: HiOutlineHome, roles: null },
   { path: '/leads', label: 'Leads', icon: HiOutlineUserGroup, roles: null },
   { path: '/commissions', label: 'Commissions', icon: HiOutlineCurrencyDollar, roles: null },
-  { path: '/reports', label: 'Reports', icon: HiOutlineChartBar, roles: null },
+  { path: '/subscriptions', label: 'Subscriptions', icon: HiOutlineRefresh, roles: ['admin', 'manager', 'team_lead'] },
+  { path: '/forecast', label: 'Forecast', icon: HiOutlineTrendingUp, roles: ['admin', 'manager', 'team_lead'] },
+  { path: '/monthly-performance', label: 'Performance', icon: HiOutlineCalendar, roles: ['admin', 'manager'] },
+  { path: '/reports', label: 'Reports', icon: HiOutlineChartBar, roles: ['admin', 'manager', 'team_lead'] },
   { path: '/users', label: 'Users', icon: HiOutlineUsers, roles: ['admin', 'manager'] },
   { path: '/settings', label: 'Settings', icon: HiOutlineCog, roles: null },
 ];

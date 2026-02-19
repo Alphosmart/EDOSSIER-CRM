@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   LEAD_STATUSES, TERRITORIES, SCHOOL_TYPES,
-  FOLLOW_UP_METHODS, PAYMENT_STATUSES
+  FOLLOW_UP_METHODS, PAYMENT_STATUSES,
+  SUBSCRIPTION_TYPES, SUBSCRIPTION_PLANS, STORAGE_SIZES
 } from '../../utils/constants';
 
 const initialFormData = {
@@ -19,11 +20,15 @@ const initialFormData = {
   currentSystemUsed: '', painPoints: '', decisionTimeline: '', competitorMentioned: '',
   relationshipStrength: '', probabilityOfClosing: '',
   commissionPercentage: 25, territory: '', additionalNotes: '',
-  assignedTo: ''
+  assignedTo: '', lga: '',
+  subscriptionType: '', subscriptionStartDate: '', renewalDate: '',
+  subscriptionPlan: '', storageSize: ''
 };
 
 export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
+  const isAdminOrManager = hasRole('admin', 'manager');
   const [formData, setFormData] = useState(initialFormData);
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +39,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         if (lead[key] !== undefined && lead[key] !== null) {
           if (key === 'assignedTo' && typeof lead[key] === 'object') {
             data[key] = lead[key]._id;
-          } else if (['dateVisited', 'nextFollowUpDate', 'nextMeetingDate', 'expectedClosingDate'].includes(key) && lead[key]) {
+          } else if (['dateVisited', 'nextFollowUpDate', 'nextMeetingDate', 'expectedClosingDate', 'subscriptionStartDate', 'renewalDate'].includes(key) && lead[key]) {
             data[key] = new Date(lead[key]).toISOString().split('T')[0];
           } else {
             data[key] = lead[key];
@@ -232,21 +237,37 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-          <select name="paymentStatus" value={formData.paymentStatus} onChange={handleChange} className="input-field">
-            {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          {isAdminOrManager ? (
+            <select name="paymentStatus" value={formData.paymentStatus} onChange={handleChange} className="input-field">
+              {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          ) : (
+            <input value={formData.paymentStatus} disabled className="input-field bg-gray-100 cursor-not-allowed" />
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (₦)</label>
-          <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} className="input-field" />
+          {isAdminOrManager ? (
+            <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} className="input-field" />
+          ) : (
+            <input type="number" value={formData.amountPaid} disabled className="input-field bg-gray-100 cursor-not-allowed" />
+          )}
         </div>
       </Section>
 
       <Section title="Commission & Assignment">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
-          <input type="number" min="0" max="100" name="commissionPercentage" value={formData.commissionPercentage} onChange={handleChange} className="input-field" />
-        </div>
+        {isAdmin ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
+            <input type="number" min="0" max="100" name="commissionPercentage" value={formData.commissionPercentage} onChange={handleChange} className="input-field" />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
+            <input type="number" value={formData.commissionPercentage} disabled className="input-field bg-gray-100 cursor-not-allowed" />
+            <p className="text-xs text-gray-400 mt-1">Set by admin</p>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Territory</label>
           <select name="territory" value={formData.territory} onChange={handleChange} className="input-field">
@@ -255,10 +276,14 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
           </select>
         </div>
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">LGA</label>
+          <input name="lga" value={formData.lga} onChange={handleChange} className="input-field" placeholder="Local Government Area" />
+        </div>
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Relationship Strength (1-5)</label>
           <input type="number" min="1" max="5" name="relationshipStrength" value={formData.relationshipStrength} onChange={handleChange} className="input-field" />
         </div>
-        {users.length > 0 && (
+        {isAdminOrManager && users.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
             <select name="assignedTo" value={formData.assignedTo} onChange={handleChange} className="input-field">
@@ -269,6 +294,38 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
             </select>
           </div>
         )}
+      </Section>
+
+      <Section title="Subscription & Recurring Revenue">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Type</label>
+          <select name="subscriptionType" value={formData.subscriptionType} onChange={handleChange} className="input-field">
+            <option value="">Select Type</option>
+            {SUBSCRIPTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Plan</label>
+          <select name="subscriptionPlan" value={formData.subscriptionPlan} onChange={handleChange} className="input-field">
+            <option value="">Select Plan</option>
+            {SUBSCRIPTION_PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Storage Size</label>
+          <select name="storageSize" value={formData.storageSize} onChange={handleChange} className="input-field">
+            <option value="">Select Size</option>
+            {STORAGE_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Start Date</label>
+          <input type="date" name="subscriptionStartDate" value={formData.subscriptionStartDate} onChange={handleChange} className="input-field" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Renewal Date</label>
+          <input type="date" name="renewalDate" value={formData.renewalDate} onChange={handleChange} className="input-field" />
+        </div>
       </Section>
 
       <Section title="Competitive Intelligence">

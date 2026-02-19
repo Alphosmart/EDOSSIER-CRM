@@ -15,6 +15,9 @@ import CommissionsPage from './pages/CommissionsPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import UsersPage from './pages/UsersPage';
+import SubscriptionPage from './pages/SubscriptionPage';
+import ForecastPage from './pages/ForecastPage';
+import MonthlyPerformancePage from './pages/MonthlyPerformancePage';
 
 // Protected Route wrapper
 function ProtectedRoute({ roles }) {
@@ -66,11 +69,18 @@ function AppRoutes() {
           <Route path="/leads/new" element={<AddLeadPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />
           <Route path="/commissions" element={<CommissionsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
 
-          {/* Admin-only */}
+          {/* Manager / Team Lead / Admin */}
+          <Route element={<ProtectedRoute roles={['admin', 'manager', 'team_lead']} />}>
+            <Route path="/subscriptions" element={<SubscriptionPage />} />
+            <Route path="/forecast" element={<ForecastPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+          </Route>
+
+          {/* Admin / Manager only */}
           <Route element={<ProtectedRoute roles={['admin', 'manager']} />}>
+            <Route path="/monthly-performance" element={<MonthlyPerformancePage />} />
             <Route path="/users" element={<UsersPage />} />
           </Route>
         </Route>
@@ -84,7 +94,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <AppRoutes />
         <Toaster

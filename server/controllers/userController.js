@@ -58,6 +58,29 @@ exports.updateUser = async (req, res) => {
   }
 };
 
+// @desc    Set commission rate for a user
+// @route   PATCH /api/users/:id/commission-rate
+// @access  Admin
+exports.setCommissionRate = async (req, res) => {
+  try {
+    const { defaultCommissionRate } = req.body;
+    if (defaultCommissionRate === undefined || defaultCommissionRate < 0 || defaultCommissionRate > 100) {
+      return res.status(400).json({ message: 'Rate must be between 0 and 100' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.defaultCommissionRate = defaultCommissionRate;
+    user.updatedAt = Date.now();
+    await user.save();
+
+    res.json({ _id: user._id, defaultCommissionRate: user.defaultCommissionRate });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Deactivate user
 // @route   DELETE /api/users/:id
 // @access  Admin

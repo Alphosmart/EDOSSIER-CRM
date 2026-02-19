@@ -48,14 +48,25 @@ export default function CommissionsPage() {
     }
   };
 
-  const handlePay = async (id) => {
-    if (!window.confirm('Mark this commission as paid?')) return;
+  const handleDisburse = async (id) => {
+    if (!window.confirm('Mark this commission as disbursed (payment sent)?')) return;
     try {
-      await commissionService.pay(id);
-      toast.success('Commission marked as paid');
+      await commissionService.disburse(id);
+      toast.success('Commission marked as disbursed — awaiting marketer confirmation');
       loadData();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to mark paid');
+      toast.error(error.response?.data?.message || 'Failed to disburse');
+    }
+  };
+
+  const handleConfirm = async (id) => {
+    if (!window.confirm('Confirm that you have received this commission payment?')) return;
+    try {
+      await commissionService.confirm(id);
+      toast.success('Payment receipt confirmed');
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to confirm receipt');
     }
   };
 
@@ -64,10 +75,11 @@ export default function CommissionsPage() {
   if (loading) return <LoadingSpinner size="lg" />;
 
   const summaryCards = summary ? [
-    { label: 'Total Earned', value: formatNaira(summary.totalEarned || 0), icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
-    { label: 'Pending', value: formatNaira(summary.totalPending || 0), icon: HiOutlineClock, color: 'bg-yellow-50 text-yellow-600' },
-    { label: 'Approved', value: formatNaira(summary.totalApproved || 0), icon: HiOutlineCheckCircle, color: 'bg-green-50 text-green-600' },
-    { label: 'Paid', value: formatNaira(summary.totalPaid || 0), icon: HiOutlineCheck, color: 'bg-purple-50 text-purple-600' },
+    { label: 'Total Earned', value: formatNaira(summary.totalAmount || 0), icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
+    { label: 'Pending', value: formatNaira(summary.pending?.amount || 0), icon: HiOutlineClock, color: 'bg-yellow-50 text-yellow-600' },
+    { label: 'Approved', value: formatNaira(summary.approved?.amount || 0), icon: HiOutlineCheckCircle, color: 'bg-green-50 text-green-600' },
+    { label: 'Disbursed', value: formatNaira(summary.disbursed?.amount || 0), icon: HiOutlineBanknotes, color: 'bg-orange-50 text-orange-600' },
+    { label: 'Confirmed Paid', value: formatNaira(summary.paid?.amount || 0), icon: HiOutlineCheck, color: 'bg-purple-50 text-purple-600' },
   ] : [];
 
   return (
@@ -87,7 +99,7 @@ export default function CommissionsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {summaryCards.map((card, i) => (
           <div key={i} className="card flex items-center gap-3">
             <div className={`p-2 rounded-lg ${card.color}`}>
@@ -104,8 +116,8 @@ export default function CommissionsPage() {
       {tab === 'list' && (
         <>
           {/* Filters */}
-          <div className="flex gap-2">
-            {['all', 'Pending', 'Approved', 'Paid'].map(f => (
+          <div className="flex gap-2 flex-wrap">
+            {['all', 'Pending', 'Approved', 'Disbursed', 'Paid'].map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -131,7 +143,7 @@ export default function CommissionsPage() {
                     <th className="px-4 py-3">Commission</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Date</th>
-                    {hasRole('manager', 'admin') && <th className="px-4 py-3">Actions</th>}
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -139,19 +151,20 @@ export default function CommissionsPage() {
                     <tr><td colSpan="8" className="px-4 py-8 text-center text-gray-500">No commissions found</td></tr>
                   ) : filtered.map(c => (
                     <tr key={c._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{c.lead?.schoolName || 'N/A'}</td>
+                      <td className="px-4 py-3 font-medium">{c.leadId?.schoolName || 'N/A'}</td>
                       {hasRole('manager', 'admin') && (
-                        <td className="px-4 py-3">{c.salesRep?.firstName} {c.salesRep?.lastName}</td>
+                        <td className="px-4 py-3">{c.userId?.firstName} {c.userId?.lastName}</td>
                       )}
-                      <td className="px-4 py-3">{formatNaira(c.dealValue)}</td>
-                      <td className="px-4 py-3">{c.commissionRate}%</td>
+                      <td className="px-4 py-3">{formatNaira(c.dealAmount)}</td>
+                      <td className="px-4 py-3">{c.commissionPercentage}%</td>
                       <td className="px-4 py-3 font-bold text-green-600">{formatNaira(c.commissionAmount)}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 text-xs rounded-full font-medium ${
                           c.status === 'Paid' ? 'bg-green-100 text-green-800' :
+                          c.status === 'Disbursed' ? 'bg-orange-100 text-orange-800' :
                           c.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
                           'bg-yellow-100 text-yellow-800'
-                        }`}>{c.status}</span>
+                        }`}>{c.status === 'Paid' ? 'Confirmed Paid' : c.status}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-500">{formatDate(c.createdAt)}</td>
                       {hasRole('manager', 'admin') && (
@@ -164,12 +177,23 @@ export default function CommissionsPage() {
                               </button>
                             )}
                             {c.status === 'Approved' && hasRole('admin') && (
-                              <button onClick={() => handlePay(c._id)}
-                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">
-                                Mark Paid
+                              <button onClick={() => handleDisburse(c._id)}
+                                className="px-2 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700">
+                                Mark Disbursed
                               </button>
                             )}
                           </div>
+                        </td>
+                      )}
+                      {/* Marketer confirm receipt */}
+                      {!hasRole('manager', 'admin') && (
+                        <td className="px-4 py-3">
+                          {c.status === 'Disbursed' && c.userId?._id === user?._id && (
+                            <button onClick={() => handleConfirm(c._id)}
+                              className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">
+                              Confirm Received
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>

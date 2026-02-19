@@ -47,3 +47,17 @@ export const ROLE_LABELS = {
   manager: 'Manager',
   admin: 'Admin'
 };
+
+export const SUBSCRIPTION_TYPES = ['Monthly', 'Quarterly', 'Bi-Annually', 'Annually', 'Custom'];
+
+export const SUBSCRIPTION_PLANS = ['Free', 'Basic', 'Deluxe', 'Premium', 'Enterprise', 'Custom'];
+
+export const STORAGE_SIZES = ['5GB', '10GB', '25GB', '50GB', '100GB', 'Unlimited'];
+
+export const NIGERIAN_STATES = [
+  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
+  'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT', 'Gombe',
+  'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara',
+  'Lagos', 'Nassarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau',
+  'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara'
+];

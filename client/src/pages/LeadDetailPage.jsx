@@ -169,7 +169,7 @@ export default function LeadDetailPage() {
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Commission</p>
                 <p className="text-lg font-bold text-green-600 mt-1">
-                  {lead.currentStatus === 'Closed Won' ? formatNaira(lead.commissionAmount) : `${lead.commissionPercentage}%`}
+                  {lead.commissionPercentage}%{lead.commissionAmount > 0 && ` (${formatNaira(lead.commissionAmount)})`}
                 </p>
               </div>
             </div>
@@ -284,12 +284,68 @@ export default function LeadDetailPage() {
                   <span className="ml-2">{formatNaira(lead.amountPaid)}</span>
                 </div>
               )}
+              {(lead.negotiatedPrice || 0) - (lead.amountPaid || 0) > 0 && (
+                <div>
+                  <span className="text-gray-500">Outstanding:</span>
+                  <span className="ml-2 text-red-600 font-medium">{formatNaira((lead.negotiatedPrice || 0) - (lead.amountPaid || 0))}</span>
+                </div>
+              )}
               <div>
                 <span className="text-gray-500">Expected Close:</span>
                 <span className="ml-2">{formatDate(lead.expectedClosingDate)}</span>
               </div>
             </div>
           </div>
+
+          {/* Subscription Info */}
+          {(lead.subscriptionType || lead.subscriptionPlan) && (
+            <div className="card">
+              <h3 className="text-lg font-semibold mb-4">Subscription & Recurring Revenue</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                {lead.subscriptionType && (
+                  <div>
+                    <span className="text-gray-500">Type:</span>
+                    <span className="ml-2 font-medium">{lead.subscriptionType}</span>
+                  </div>
+                )}
+                {lead.subscriptionPlan && (
+                  <div>
+                    <span className="text-gray-500">Plan:</span>
+                    <span className="ml-2 font-medium">{lead.subscriptionPlan}</span>
+                  </div>
+                )}
+                {lead.storageSize && (
+                  <div>
+                    <span className="text-gray-500">Storage:</span>
+                    <span className="ml-2">{lead.storageSize}</span>
+                  </div>
+                )}
+                {lead.subscriptionStartDate && (
+                  <div>
+                    <span className="text-gray-500">Start Date:</span>
+                    <span className="ml-2">{formatDate(lead.subscriptionStartDate)}</span>
+                  </div>
+                )}
+                {lead.renewalDate && (
+                  <div>
+                    <span className="text-gray-500">Renewal Date:</span>
+                    <span className={`ml-2 font-medium ${
+                      new Date(lead.renewalDate) < new Date() ? 'text-red-600' :
+                      new Date(lead.renewalDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) ? 'text-yellow-600' : 'text-green-600'
+                    }`}>{formatDate(lead.renewalDate)}</span>
+                  </div>
+                )}
+                {lead.renewalDate && (
+                  <div>
+                    <span className="text-gray-500">Days Until Renewal:</span>
+                    <span className="ml-2 font-medium">
+                      {Math.ceil((new Date(lead.renewalDate) - new Date()) / (1000 * 60 * 60 * 24))} days
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Notes & Intelligence */}
           {(lead.responseSummary || lead.objectionsRaised || lead.painPoints || lead.additionalNotes) && (

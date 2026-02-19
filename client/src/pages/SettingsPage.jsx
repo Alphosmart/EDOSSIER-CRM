@@ -1,18 +1,79 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSearchParams } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { userService } from '../services/userService';
 import toast from 'react-hot-toast';
-import { HiOutlineUser, HiOutlineLockClosed } from 'react-icons/hi';
+import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil } from 'react-icons/hi';
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('profile');
+
+  // Auto-select tab from query param (e.g. /settings?tab=commission)
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t === 'commission' && isAdmin) setTab('commission');
+  }, [searchParams, isAdmin]);
   const [passwords, setPasswords] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
+
+  // Commission rates state
+  const [users, setUsers] = useState([]);
+  const [ratesLoading, setRatesLoading] = useState(false);
+  const [editingRate, setEditingRate] = useState({}); // { userId: rateValue }
+  const [savingRate, setSavingRate] = useState({}); // { userId: bool }
+
+  useEffect(() => {
+    if (tab === 'commission' && isAdmin) {
+      loadUsers();
+    }
+  }, [tab]);
+
+  const loadUsers = async () => {
+    setRatesLoading(true);
+    try {
+      const { data } = await userService.getAll();
+      setUsers(data.filter(u => u.isActive));
+    } catch {
+      toast.error('Failed to load users');
+    } finally {
+      setRatesLoading(false);
+    }
+  };
+
+  const startEdit = (userId, currentRate) => {
+    setEditingRate(prev => ({ ...prev, [userId]: currentRate ?? '' }));
+  };
+
+  const cancelEdit = (userId) => {
+    setEditingRate(prev => { const n = { ...prev }; delete n[userId]; return n; });
+  };
+
+  const saveRate = async (userId) => {
+    const rate = parseFloat(editingRate[userId]);
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      toast.error('Rate must be between 0 and 100');
+      return;
+    }
+    setSavingRate(prev => ({ ...prev, [userId]: true }));
+    try {
+      await userService.setCommissionRate(userId, rate);
+      setUsers(prev => prev.map(u => u._id === userId ? { ...u, defaultCommissionRate: rate } : u));
+      cancelEdit(userId);
+      toast.success('Commission rate updated');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update rate');
+    } finally {
+      setSavingRate(prev => ({ ...prev, [userId]: false }));
+    }
+  };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -36,11 +97,18 @@ export default function SettingsPage() {
     }
   };
 
+  const ROLE_LABELS = {
+    admin: 'Admin',
+    manager: 'Manager',
+    team_lead: 'Team Lead',
+    sales_rep: 'Sales Rep',
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="page-title">Settings</h1>
 
-      <div className="flex gap-2 border-b pb-2">
+      <div className="flex gap-2 border-b pb-2 flex-wrap">
         <button
           onClick={() => setTab('profile')}
           className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
@@ -57,6 +125,16 @@ export default function SettingsPage() {
         >
           <HiOutlineLockClosed className="w-4 h-4" /> Security
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => setTab('commission')}
+            className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
+              tab === 'commission' ? 'border-b-2 border-primary-600 text-primary-600' : 'text-gray-500'
+            }`}
+          >
+            <HiOutlineCurrencyDollar className="w-4 h-4" /> Commission Rates
+          </button>
+        )}
       </div>
 
       {tab === 'profile' && (
@@ -145,6 +223,112 @@ export default function SettingsPage() {
               {loading ? 'Changing...' : 'Change Password'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ── Commission Rates (admin only) ── */}
+      {tab === 'commission' && isAdmin && (
+        <div className="space-y-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Commission Rates</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Set the default commission percentage for each team member. This rate is applied automatically when a lead is closed won.
+              </p>
+            </div>
+            <button onClick={loadUsers} className="btn-secondary text-sm">Refresh</button>
+          </div>
+
+          {ratesLoading ? (
+            <div className="card py-10 text-center text-gray-400">Loading…</div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-gray-500 uppercase text-xs">
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Territory</th>
+                    <th className="px-4 py-3 w-40">Commission Rate (%)</th>
+                    <th className="px-4 py-3 w-28">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {users.length === 0 && (
+                    <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-400">No users found</td></tr>
+                  )}
+                  {users.map(u => {
+                    const editing = editingRate[u._id] !== undefined;
+                    const saving = savingRate[u._id];
+                    return (
+                      <tr key={u._id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">
+                          {u.firstName} {u.lastName}
+                          <p className="text-xs text-gray-400">{u.email}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+                            {ROLE_LABELS[u.role] || u.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">{u.territory || '—'}</td>
+                        <td className="px-4 py-3">
+                          {editing ? (
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={editingRate[u._id]}
+                              onChange={e => setEditingRate(prev => ({ ...prev, [u._id]: e.target.value }))}
+                              className="input-field w-24 py-1 text-sm"
+                              autoFocus
+                            />
+                          ) : (
+                            <span className="font-semibold text-primary-700">
+                              {u.defaultCommissionRate ?? 0}%
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {editing ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => saveRate(u._id)}
+                                disabled={saving}
+                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700 flex items-center gap-1"
+                              >
+                                <HiOutlineCheck className="w-3 h-3" />
+                                {saving ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                onClick={() => cancelEdit(u._id)}
+                                className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => startEdit(u._id, u.defaultCommissionRate ?? 0)}
+                              className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
+                            >
+                              <HiOutlinePencil className="w-3 h-3" />
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400">
+            Note: Changing a user's default rate affects new leads only. Existing commission payouts are not retroactively updated.
+          </p>
         </div>
       )}
     </div>

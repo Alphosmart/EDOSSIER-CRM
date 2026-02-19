@@ -27,6 +27,8 @@ exports.getCommissions = async (req, res) => {
       .populate('userId', 'firstName lastName email territory')
       .populate('leadId', 'schoolName schoolId territory')
       .populate('approvedBy', 'firstName lastName')
+      .populate('disbursedBy', 'firstName lastName')
+      .populate('confirmedBy', 'firstName lastName')
       .sort({ createdAt: -1 });
 
     res.json(commissions);
@@ -43,6 +45,8 @@ exports.getMyCommissions = async (req, res) => {
     const commissions = await CommissionPayout.find({ userId: req.user._id })
       .populate('leadId', 'schoolName schoolId territory')
       .populate('approvedBy', 'firstName lastName')
+      .populate('disbursedBy', 'firstName lastName')
+      .populate('confirmedBy', 'firstName lastName')
       .sort({ createdAt: -1 });
 
     res.json(commissions);
@@ -81,10 +85,10 @@ exports.approveCommission = async (req, res) => {
   }
 };
 
-// @desc    Mark commission as paid
-// @route   PUT /api/commissions/:id/pay
+// @desc    Mark commission as disbursed (admin says money sent)
+// @route   PUT /api/commissions/:id/disburse
 // @access  Admin
-exports.payCommission = async (req, res) => {
+exports.disburseCommission = async (req, res) => {
   try {
     const commission = await CommissionPayout.findById(req.params.id);
     if (!commission) {
@@ -92,18 +96,57 @@ exports.payCommission = async (req, res) => {
     }
 
     if (commission.status !== 'Approved') {
-      return res.status(400).json({ message: 'Commission must be approved before payment' });
+      return res.status(400).json({ message: 'Commission must be approved before disbursement' });
     }
 
-    commission.status = 'Paid';
-    commission.paidDate = new Date();
+    commission.status = 'Disbursed';
+    commission.disbursedDate = new Date();
+    commission.disbursedBy = req.user._id;
     commission.paymentReference = req.body.paymentReference || '';
     await commission.save();
 
     const updated = await CommissionPayout.findById(commission._id)
       .populate('userId', 'firstName lastName email')
       .populate('leadId', 'schoolName schoolId')
-      .populate('approvedBy', 'firstName lastName');
+      .populate('approvedBy', 'firstName lastName')
+      .populate('disbursedBy', 'firstName lastName');
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Marketer confirms receipt of payment
+// @route   PUT /api/commissions/:id/confirm
+// @access  Private (owner of the commission)
+exports.confirmReceipt = async (req, res) => {
+  try {
+    const commission = await CommissionPayout.findById(req.params.id);
+    if (!commission) {
+      return res.status(404).json({ message: 'Commission not found' });
+    }
+
+    if (commission.status !== 'Disbursed') {
+      return res.status(400).json({ message: 'Commission must be disbursed before you can confirm receipt' });
+    }
+
+    // Only the commission owner can confirm
+    if (!commission.userId.equals(req.user._id) && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only the assigned marketer can confirm receipt' });
+    }
+
+    commission.status = 'Paid';
+    commission.confirmedBy = req.user._id;
+    commission.confirmedDate = new Date();
+    await commission.save();
+
+    const updated = await CommissionPayout.findById(commission._id)
+      .populate('userId', 'firstName lastName email')
+      .populate('leadId', 'schoolName schoolId')
+      .populate('approvedBy', 'firstName lastName')
+      .populate('disbursedBy', 'firstName lastName')
+      .populate('confirmedBy', 'firstName lastName');
 
     res.json(updated);
   } catch (error) {
@@ -121,6 +164,7 @@ exports.getCommissionSummary = async (req, res) => {
 
     const pending = commissions.filter(c => c.status === 'Pending');
     const approved = commissions.filter(c => c.status === 'Approved');
+    const disbursed = commissions.filter(c => c.status === 'Disbursed');
     const paid = commissions.filter(c => c.status === 'Paid');
 
     res.json({
@@ -133,6 +177,10 @@ exports.getCommissionSummary = async (req, res) => {
       approved: {
         count: approved.length,
         amount: approved.reduce((sum, c) => sum + c.commissionAmount, 0)
+      },
+      disbursed: {
+        count: disbursed.length,
+        amount: disbursed.reduce((sum, c) => sum + c.commissionAmount, 0)
       },
       paid: {
         count: paid.length,

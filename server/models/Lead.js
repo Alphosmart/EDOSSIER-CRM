@@ -90,6 +90,26 @@ const LeadSchema = new mongoose.Schema({
     enum: ['Kaduna', 'Abuja', 'Lagos', 'Other']
   },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  lga: { type: String },
+
+  // Subscription & Recurring Revenue
+  subscriptionType: {
+    type: String,
+    enum: ['Monthly', 'Quarterly', 'Bi-Annually', 'Annually', 'Custom'],
+    default: null
+  },
+  subscriptionStartDate: { type: Date },
+  renewalDate: { type: Date },
+  subscriptionPlan: {
+    type: String,
+    enum: ['Free', 'Basic', 'Deluxe', 'Premium', 'Enterprise', 'Custom'],
+    default: null
+  },
+  storageSize: {
+    type: String,
+    enum: ['5GB', '10GB', '25GB', '50GB', '100GB', 'Unlimited'],
+    default: null
+  },
 
   // Notes
   additionalNotes: { type: String },

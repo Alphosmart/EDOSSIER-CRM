@@ -115,7 +115,12 @@ const seedData = async () => {
         probabilityOfClosing: 100,
         relationshipStrength: 5,
         leadSource: 'Referral',
-        nextFollowUpDate: null
+        nextFollowUpDate: null,
+        subscriptionType: 'Annually',
+        subscriptionStartDate: new Date('2026-01-15'),
+        renewalDate: new Date('2027-01-15'),
+        subscriptionPlan: 'Premium',
+        storageSize: '25GB'
       },
       {
         schoolName: 'Royal Crown International School',
@@ -139,7 +144,9 @@ const seedData = async () => {
         leadSource: 'Cold Call',
         dateVisited: new Date('2026-01-20'),
         nextFollowUpDate: new Date('2026-02-18'),
-        followUpMethod: 'Physical Visit'
+        followUpMethod: 'Physical Visit',
+        expectedClosingDate: new Date('2026-03-01'),
+        subscriptionPlan: 'Enterprise'
       },
       {
         schoolName: 'Kaduna International School',
@@ -165,7 +172,9 @@ const seedData = async () => {
         nextFollowUpDate: new Date('2026-02-20'),
         nextMeetingScheduled: true,
         nextMeetingDate: new Date('2026-02-20'),
-        followUpMethod: 'Physical Visit'
+        followUpMethod: 'Physical Visit',
+        expectedClosingDate: new Date('2026-03-15'),
+        subscriptionPlan: 'Premium'
       },
       {
         schoolName: 'Lekki British International School',
@@ -189,7 +198,9 @@ const seedData = async () => {
         leadSource: 'Conference',
         dateVisited: new Date('2026-01-25'),
         nextFollowUpDate: new Date('2026-02-16'),
-        followUpMethod: 'Email'
+        followUpMethod: 'Email',
+        expectedClosingDate: new Date('2026-02-28'),
+        subscriptionPlan: 'Enterprise'
       },
       {
         schoolName: 'Abuja Model School',
@@ -284,7 +295,12 @@ const seedData = async () => {
         assignedTo: emeka._id,
         probabilityOfClosing: 100,
         relationshipStrength: 5,
-        leadSource: 'Referral'
+        leadSource: 'Referral',
+        subscriptionType: 'Monthly',
+        subscriptionStartDate: new Date('2026-01-28'),
+        renewalDate: new Date('2026-02-28'),
+        subscriptionPlan: 'Premium',
+        storageSize: '10GB'
       },
       {
         schoolName: 'Capital City Academy',
@@ -309,7 +325,12 @@ const seedData = async () => {
         assignedTo: fatima._id,
         probabilityOfClosing: 100,
         relationshipStrength: 5,
-        leadSource: 'Conference'
+        leadSource: 'Conference',
+        subscriptionType: 'Annually',
+        subscriptionStartDate: new Date('2026-02-05'),
+        renewalDate: new Date('2027-02-05'),
+        subscriptionPlan: 'Enterprise',
+        storageSize: '100GB'
       },
       {
         schoolName: 'Zaria Grammar School',
@@ -377,7 +398,9 @@ const seedData = async () => {
         leadSource: 'Referral',
         dateVisited: new Date('2026-02-01'),
         nextFollowUpDate: new Date('2026-02-14'),
-        followUpMethod: 'Physical Visit'
+        followUpMethod: 'Physical Visit',
+        expectedClosingDate: new Date('2026-02-25'),
+        subscriptionPlan: 'Enterprise'
       }
     ];
 

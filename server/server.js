@@ -26,6 +26,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/commissions', require('./routes/commissions'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/subscriptions', require('./routes/subscriptions'));
 
 // Health check
 app.get('/api/health', (req, res) => {

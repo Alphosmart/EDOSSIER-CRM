@@ -5,5 +5,7 @@ export const dashboardService = {
   getPipeline: () => api.get('/dashboard/pipeline'),
   getRevenue: () => api.get('/dashboard/revenue'),
   getMonthly: () => api.get('/dashboard/monthly'),
-  getTerritory: () => api.get('/dashboard/territory')
+  getTerritory: () => api.get('/dashboard/territory'),
+  getForecast: () => api.get('/dashboard/forecast'),
+  getMonthlyPerformance: () => api.get('/dashboard/monthly-performance')
 };

@@ -223,3 +223,153 @@ exports.getTerritory = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Get revenue forecast (pipeline outlook)
+// @route   GET /api/dashboard/forecast
+// @access  Private
+exports.getForecast = async (req, res) => {
+  try {
+    const filter = filterByRole(req.user);
+    const leads = await Lead.find(filter).populate('assignedTo', 'firstName lastName territory');
+
+    const activeStatuses = [
+      'Interested', 'Needs Proposal', 'Needs Approval',
+      'Demo Scheduled', 'Proposal Sent', 'Negotiation'
+    ];
+    const activeLeads = leads.filter(l => activeStatuses.includes(l.currentStatus));
+    const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
+
+    const now = new Date();
+    const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    // Expected closings this month
+    const expectedThisMonth = activeLeads.filter(l => {
+      if (!l.expectedClosingDate) return false;
+      const d = new Date(l.expectedClosingDate);
+      return d >= now && d <= thisMonthEnd;
+    });
+
+    // Expected closings next month
+    const expectedNextMonth = activeLeads.filter(l => {
+      if (!l.expectedClosingDate) return false;
+      const d = new Date(l.expectedClosingDate);
+      return d >= nextMonthStart && d <= nextMonthEnd;
+    });
+
+    // Total pipeline metrics
+    const totalNegotiatedRevenue = activeLeads.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0);
+    const weightedForecast = activeLeads.reduce((sum, l) => {
+      return sum + ((l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100));
+    }, 0);
+
+    // By stage
+    const byStage = activeStatuses.map(status => {
+      const stageLeads = activeLeads.filter(l => l.currentStatus === status);
+      return {
+        status,
+        count: stageLeads.length,
+        totalValue: stageLeads.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0),
+        weightedValue: stageLeads.reduce((sum, l) =>
+          sum + ((l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100)), 0)
+      };
+    });
+
+    // Top prospects (highest weighted value, active only)
+    const topProspects = activeLeads
+      .map(l => ({
+        _id: l._id,
+        schoolName: l.schoolName,
+        schoolId: l.schoolId,
+        territory: l.territory,
+        currentStatus: l.currentStatus,
+        negotiatedPrice: l.negotiatedPrice || 0,
+        probabilityOfClosing: l.probabilityOfClosing || 0,
+        weightedValue: (l.negotiatedPrice || 0) * ((l.probabilityOfClosing || 0) / 100),
+        expectedClosingDate: l.expectedClosingDate,
+        assignedTo: l.assignedTo
+      }))
+      .sort((a, b) => b.weightedValue - a.weightedValue)
+      .slice(0, 10);
+
+    res.json({
+      totalActivePipeline: activeLeads.length,
+      totalNegotiatedRevenue: Math.round(totalNegotiatedRevenue),
+      weightedForecast: Math.round(weightedForecast),
+      expectedClosingsThisMonth: {
+        count: expectedThisMonth.length,
+        value: expectedThisMonth.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0)
+      },
+      expectedClosingsNextMonth: {
+        count: expectedNextMonth.length,
+        value: expectedNextMonth.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0)
+      },
+      totalClosedRevenue: closedWon.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0),
+      byStage,
+      topProspects
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get monthly performance breakdown (deals & revenue by month)
+// @route   GET /api/dashboard/monthly-performance
+// @access  Private
+exports.getMonthlyPerformance = async (req, res) => {
+  try {
+    const filter = filterByRole(req.user);
+    const leads = await Lead.find(filter);
+
+    const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
+    const now = new Date();
+
+    // Last 12 months
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+
+      const monthCreated = leads.filter(l => {
+        const d = new Date(l.createdAt);
+        return d >= monthStart && d <= monthEnd;
+      });
+
+      const monthClosed = closedWon.filter(l => {
+        const d = l.actualClosingDate ? new Date(l.actualClosingDate) : new Date(l.updatedAt);
+        return d >= monthStart && d <= monthEnd;
+      });
+
+      const monthRevenue = monthClosed.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0);
+      const monthCommission = monthClosed.reduce((sum, l) => sum + (l.commissionAmount || 0), 0);
+
+      months.push({
+        month: monthStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        monthKey: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}`,
+        leadsCreated: monthCreated.length,
+        dealsClosed: monthClosed.length,
+        revenue: monthRevenue,
+        commission: monthCommission,
+        avgDealSize: monthClosed.length > 0 ? Math.round(monthRevenue / monthClosed.length) : 0
+      });
+    }
+
+    // Grand totals
+    const totalRevenue = closedWon.reduce((sum, l) => sum + (l.negotiatedPrice || 0), 0);
+    const totalCommission = closedWon.reduce((sum, l) => sum + (l.commissionAmount || 0), 0);
+
+    res.json({
+      months,
+      totals: {
+        totalLeadsCreated: leads.length,
+        totalDealsClosed: closedWon.length,
+        totalRevenue,
+        totalCommission,
+        avgDealSize: closedWon.length > 0 ? Math.round(totalRevenue / closedWon.length) : 0
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

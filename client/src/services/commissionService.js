@@ -4,6 +4,7 @@ export const commissionService = {
   getAll: (params) => api.get('/commissions', { params }),
   getMy: () => api.get('/commissions/my'),
   approve: (id) => api.put(`/commissions/${id}/approve`),
-  pay: (id, data) => api.put(`/commissions/${id}/pay`, data),
+  disburse: (id, data) => api.put(`/commissions/${id}/disburse`, data),
+  confirm: (id) => api.put(`/commissions/${id}/confirm`),
   getSummary: () => api.get('/commissions/summary')
 };
