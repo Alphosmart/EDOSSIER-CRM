@@ -9,6 +9,7 @@ import { NIGERIAN_STATES, getLgasByState } from '../../utils/nigerianStatesLgas'
 import { COUNTRY_NAMES, getCurrencyByCountry, isNigeria } from '../../utils/countries';
 import { getCurrencySymbol, formatCurrency } from '../../utils/formatCurrency';
 import { getCachedRateMap, convertToUSD } from '../../services/exchangeRateService';
+import { getStatesByCountry, getCitiesByState, prewarmStates } from '../../services/geoService';
 
 const initialFormData = {
   schoolName: '', schoolType: '', address: '', city: '', state: '',
@@ -38,8 +39,16 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
   const [loading, setLoading] = useState(false);
   const [rateMap, setRateMap] = useState(null);
 
+  // Dynamic geo state
+  const [foreignStates, setForeignStates]   = useState([]);
+  const [foreignCities, setForeignCities]   = useState([]);
+  const [statesLoading, setStatesLoading]   = useState(false);
+  const [citiesLoading, setCitiesLoading]   = useState(false);
+
   // Load exchange rates once for live USD conversion hints
   useEffect(() => { getCachedRateMap().then(setRateMap); }, []);
+
+  useEffect(() => {
     if (lead) {
       const data = { ...initialFormData };
       Object.keys(data).forEach(key => {
@@ -54,6 +63,10 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         }
       });
       setFormData(data);
+      // Pre-load geo data if editing a non-Nigeria lead
+      if (lead.country && !isNigeria(lead.country)) {
+        loadForeignStates(lead.country, lead.state);
+      }
     } else {
       setFormData({
         ...initialFormData,
@@ -63,6 +76,28 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
       });
     }
   }, [lead, user]);
+
+  // Fetch states for a foreign country; optionally also load cities for a preselected state
+  const loadForeignStates = async (country, existingState) => {
+    setStatesLoading(true);
+    setForeignStates([]);
+    setForeignCities([]);
+    const states = await getStatesByCountry(country);
+    setForeignStates(states);
+    setStatesLoading(false);
+    if (existingState && states.includes(existingState)) {
+      loadForeignCities(country, existingState);
+    }
+  };
+
+  // Fetch cities for a foreign country + state
+  const loadForeignCities = async (country, state) => {
+    setCitiesLoading(true);
+    setForeignCities([]);
+    const cities = await getCitiesByState(country, state);
+    setForeignCities(cities);
+    setCitiesLoading(false);
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -145,8 +180,14 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
                 state: '',
                 territory: '',
                 lga: '',
-                region: ''
+                region: '',
+                city: ''
               }));
+              setForeignStates([]);
+              setForeignCities([]);
+              if (selectedCountry && !isNigeria(selectedCountry)) {
+                loadForeignStates(selectedCountry, '');
+              }
             }}
             className="input-field"
           >
@@ -154,12 +195,30 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
             {COUNTRY_NAMES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        {/* City */}
+        {/* City — always visible; dynamic when state is selected for non-Nigeria */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-          <input name="city" value={formData.city} onChange={handleChange} className="input-field" />
+          {!isNigeria(formData.country) && foreignCities.length > 0 ? (
+            <select
+              name="city"
+              value={formData.city}
+              onChange={handleChange}
+              className="input-field"
+            >
+              <option value="">{citiesLoading ? 'Loading cities…' : 'Select City'}</option>
+              {foreignCities.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          ) : (
+            <input
+              name="city"
+              value={formData.city}
+              onChange={handleChange}
+              className="input-field"
+              placeholder={citiesLoading ? 'Loading…' : 'Enter city'}
+            />
+          )}
         </div>
-        {/* Nigeria: State + LGA dropdowns. Others: free-text region */}
+        {/* Nigeria: State + LGA dropdowns. Others: dynamic state + city from CountriesNow API */}
         {isNigeria(formData.country) ? (
           <>
             <div>
@@ -198,14 +257,41 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
           </>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Region / State</label>
-            <input
-              name="region"
-              value={formData.region || formData.state}
-              onChange={e => setFormData(prev => ({ ...prev, region: e.target.value, state: e.target.value, territory: e.target.value }))}
-              className="input-field"
-              placeholder="e.g., Lagos, Greater Accra"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              State / Region / Province
+              {statesLoading && <span className="ml-2 text-xs text-blue-500">Loading…</span>}
+            </label>
+            {foreignStates.length > 0 ? (
+              <select
+                name="state"
+                value={formData.state}
+                onChange={e => {
+                  const selectedState = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    state: selectedState,
+                    territory: selectedState,
+                    region: selectedState,
+                    city: ''
+                  }));
+                  if (selectedState) loadForeignCities(formData.country, selectedState);
+                  else setForeignCities([]);
+                }}
+                className="input-field"
+              >
+                <option value="">Select State / Region</option>
+                {foreignStates.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            ) : (
+              <input
+                name="region"
+                value={formData.region || formData.state}
+                onChange={e => setFormData(prev => ({ ...prev, region: e.target.value, state: e.target.value, territory: e.target.value }))}
+                className="input-field"
+                placeholder={statesLoading ? 'Loading…' : 'e.g., Lagos, Greater Accra'}
+                disabled={statesLoading}
+              />
+            )}
           </div>
         )}
         <div className="md:col-span-2">
