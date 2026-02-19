@@ -169,6 +169,27 @@ export default function CommissionsPage() {
   const filtered = filter === 'all' ? commissions : commissions.filter(c => c.status === filter);
   const FILTERS = ['all', 'Pending', 'Approved', 'Disbursed', 'Paid'];
 
+  const downloadCSV = () => {
+    const headers = ['School', 'Sales Rep', 'Deal Value (USD)', 'Rate (%)', 'Commission (USD)', 'Status', 'Date'];
+    const rows = filtered.map(c => [
+      `"${c.leadId?.schoolName || ''}"`,
+      `"${c.userId?.firstName || ''} ${c.userId?.lastName || ''}"`,
+      c.dealAmount || 0,
+      c.commissionPercentage || 0,
+      c.commissionAmount || 0,
+      c.status || '',
+      c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `commissions_${filter}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) return <LoadingSpinner size="lg" />;
 
   const summaryCards = summary ? [
@@ -230,6 +251,11 @@ export default function CommissionsPage() {
               Summary
             </button>
           </div>
+          {/* CSV Export */}
+          <button onClick={downloadCSV} className="btn-secondary text-sm py-1.5 px-3 flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Export CSV
+          </button>
         </div>
       </div>
 

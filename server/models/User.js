@@ -26,6 +26,7 @@ const UserSchema = new mongoose.Schema({
     // Now stores any Nigerian state or country — no enum restriction
   },
   defaultCommissionRate: { type: Number, default: 25, min: 0, max: 100 },
+  monthlyTarget: { type: Number, default: 0 },   // target deal value in USD per month
   isActive: { type: Boolean, default: true },
   // Password reset
   resetPasswordToken: { type: String, select: false },

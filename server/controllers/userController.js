@@ -33,7 +33,7 @@ exports.getUserById = async (req, res) => {
 // @access  Admin
 exports.updateUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, whatsapp, role, territory, defaultCommissionRate, isActive } = req.body;
+    const { firstName, lastName, email, phone, whatsapp, role, territory, defaultCommissionRate, isActive, monthlyTarget } = req.body;
 
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -49,6 +49,7 @@ exports.updateUser = async (req, res) => {
     user.territory = territory || user.territory;
     user.defaultCommissionRate = defaultCommissionRate !== undefined ? defaultCommissionRate : user.defaultCommissionRate;
     user.isActive = isActive !== undefined ? isActive : user.isActive;
+    if (monthlyTarget !== undefined) user.monthlyTarget = monthlyTarget;
     user.updatedAt = Date.now();
 
     const updatedUser = await user.save();

@@ -14,5 +14,7 @@ export const dashboardService = {
   getMonthly: (opts) => api.get('/dashboard/monthly', buildParams(opts)),
   getTerritory: (opts) => api.get('/dashboard/territory', buildParams(opts)),
   getForecast: (opts) => api.get('/dashboard/forecast', buildParams(opts)),
-  getMonthlyPerformance: (opts) => api.get('/dashboard/monthly-performance', buildParams(opts))
+  getMonthlyPerformance: (opts) => api.get('/dashboard/monthly-performance', buildParams(opts)),
+  compareStats: (periodA_from, periodA_to, periodB_from, periodB_to) =>
+    api.get('/dashboard/compare', { params: { periodA_from, periodA_to, periodB_from, periodB_to } }),
 };

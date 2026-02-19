@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getKPIs, getPipeline, getRevenue, getMonthly, getTerritory, getForecast, getMonthlyPerformance } = require('../controllers/dashboardController');
+const { getKPIs, getPipeline, getRevenue, getMonthly, getTerritory, getForecast, getMonthlyPerformance, compareStats } = require('../controllers/dashboardController');
 const { protect } = require('../middleware/auth');
 
 router.get('/kpis', protect, getKPIs);
@@ -10,5 +10,6 @@ router.get('/monthly', protect, getMonthly);
 router.get('/territory', protect, getTerritory);
 router.get('/forecast', protect, getForecast);
 router.get('/monthly-performance', protect, getMonthlyPerformance);
+router.get('/compare', protect, compareStats);
 
 module.exports = router;

@@ -5,6 +5,14 @@ import { formatDate, isOverdue } from '../../utils/formatDate';
 import LeadStatusDropdown from './LeadStatusDropdown';
 import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar } from 'react-icons/hi';
 
+// Days since status last changed (lead.updatedAt)
+function AgingBadge({ updatedAt }) {
+  const days = Math.floor((Date.now() - new Date(updatedAt)) / 86400000);
+  if (days < 7) return <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">{days}d</span>;
+  if (days < 14) return <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">{days}d ⚠</span>;
+  return <span className="text-xs px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">{days}d 🔥</span>;
+}
+
 export default function LeadCard({ lead, onStatusChange }) {
   const overdue = lead.nextFollowUpDate && isOverdue(lead.nextFollowUpDate) &&
     !['Closed Won', 'Closed Lost', 'Not Interested'].includes(lead.currentStatus);
@@ -21,10 +29,13 @@ export default function LeadCard({ lead, onStatusChange }) {
           </Link>
           <p className="text-xs text-gray-500 mt-0.5">{lead.schoolId} • {lead.territory}</p>
         </div>
-        <LeadStatusDropdown
-          currentStatus={lead.currentStatus}
-          onChange={(status) => onStatusChange(lead._id, status)}
-        />
+        <div className="flex flex-col items-end gap-1">
+          <AgingBadge updatedAt={lead.updatedAt || lead.createdAt} />
+          <LeadStatusDropdown
+            currentStatus={lead.currentStatus}
+            onChange={(status) => onStatusChange(lead._id, status)}
+          />
+        </div>
       </div>
 
       <div className="space-y-2 text-sm text-gray-600">

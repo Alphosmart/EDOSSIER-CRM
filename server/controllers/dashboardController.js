@@ -418,3 +418,72 @@ exports.getMonthlyPerformance = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @desc  Compare two date-range periods (KPIs for period A vs period B)
+// @route GET /api/dashboard/compare
+// @query periodA_from, periodA_to, periodB_from, periodB_to
+// @access Private
+// ─────────────────────────────────────────────────────────────────────────────
+const buildPeriodStats = async (user, from, to, rateMap) => {
+  const filter = filterByRole(user, from, to);
+  const leads = await Lead.find(filter);
+
+  const activeStatuses = [
+    'Interested', 'Needs Proposal', 'Needs Approval',
+    'Demo Scheduled', 'Proposal Sent', 'Negotiation'
+  ];
+
+  const closedWon  = leads.filter(l => l.currentStatus === 'Closed Won');
+  const closedLost = leads.filter(l => l.currentStatus === 'Closed Lost');
+  const active     = leads.filter(l => activeStatuses.includes(l.currentStatus));
+
+  const totalRevenue    = closedWon.reduce((s, l) => s + toUSD(l.negotiatedPrice || 0, l.currency, rateMap), 0);
+  const totalCommission = closedWon.reduce((s, l) => s + toUSD(l.commissionAmount || 0, l.currency, rateMap), 0);
+  const pipelineValue   = active.reduce((s, l) => s + toUSD(l.proposedPrice || 0, l.currency, rateMap), 0);
+  const winRate         = (closedWon.length + closedLost.length) > 0
+    ? Math.round((closedWon.length / (closedWon.length + closedLost.length)) * 100)
+    : 0;
+
+  return {
+    newLeads:     leads.length,
+    closedWon:    closedWon.length,
+    closedLost:   closedLost.length,
+    activeLeads:  active.length,
+    totalRevenue: Math.round(totalRevenue * 100) / 100,
+    totalCommission: Math.round(totalCommission * 100) / 100,
+    pipelineValue: Math.round(pipelineValue * 100) / 100,
+    winRate,
+    avgDealSize: closedWon.length > 0
+      ? Math.round((totalRevenue / closedWon.length) * 100) / 100
+      : 0
+  };
+};
+
+exports.compareStats = async (req, res) => {
+  try {
+    const { periodA_from, periodA_to, periodB_from, periodB_to } = req.query;
+
+    if (!periodA_from || !periodA_to || !periodB_from || !periodB_to) {
+      return res.status(400).json({ message: 'All four date params required: periodA_from, periodA_to, periodB_from, periodB_to' });
+    }
+
+    const rateMap = await getRateMap();
+    const [periodA, periodB] = await Promise.all([
+      buildPeriodStats(req.user, periodA_from, periodA_to, rateMap),
+      buildPeriodStats(req.user, periodB_from, periodB_to, rateMap)
+    ]);
+
+    // Compute % change for each metric
+    const delta = (a, b) => b === 0 ? null : Math.round(((a - b) / b) * 100);
+
+    const changes = {};
+    Object.keys(periodA).forEach(k => {
+      changes[k] = delta(periodA[k], periodB[k]);
+    });
+
+    res.json({ periodA, periodB, changes, labels: { A: `${periodA_from} – ${periodA_to}`, B: `${periodB_from} – ${periodB_to}` } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

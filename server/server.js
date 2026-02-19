@@ -61,6 +61,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/exchange-rates', require('./routes/exchangeRates'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Health check
 app.get('/api/health', (req, res) => {

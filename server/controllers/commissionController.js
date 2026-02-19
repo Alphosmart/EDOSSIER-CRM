@@ -1,4 +1,5 @@
 const CommissionPayout = require('../models/CommissionPayout');
+const { createNotification } = require('./notificationController');
 
 // Helper: filter by role
 const filterByRole = (user) => {
@@ -79,6 +80,15 @@ exports.approveCommission = async (req, res) => {
       .populate('leadId', 'schoolName schoolId')
       .populate('approvedBy', 'firstName lastName');
 
+    // Notify the rep
+    createNotification(
+      commission.userId,
+      'commission',
+      'Commission Approved ✓',
+      `Your commission for ${updated.leadId?.schoolName || 'a deal'} has been approved by ${req.user.firstName} ${req.user.lastName}.`,
+      '/commissions'
+    );
+
     res.json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -110,6 +120,15 @@ exports.disburseCommission = async (req, res) => {
       .populate('leadId', 'schoolName schoolId')
       .populate('approvedBy', 'firstName lastName')
       .populate('disbursedBy', 'firstName lastName');
+
+    // Notify rep that payment has been sent — they need to confirm
+    createNotification(
+      commission.userId,
+      'commission',
+      '💸 Commission Disbursed — Please Confirm',
+      `Your commission for ${updated.leadId?.schoolName || 'a deal'} has been disbursed. Please confirm receipt in the Commissions page.`,
+      '/commissions'
+    );
 
     res.json(updated);
   } catch (error) {
@@ -147,6 +166,18 @@ exports.confirmReceipt = async (req, res) => {
       .populate('approvedBy', 'firstName lastName')
       .populate('disbursedBy', 'firstName lastName')
       .populate('confirmedBy', 'firstName lastName');
+
+    // Notify admins/managers that rep confirmed receipt
+    // (notify the disbursedBy user if available, otherwise skip)
+    if (updated.disbursedBy?._id) {
+      createNotification(
+        updated.disbursedBy._id,
+        'commission',
+        'Commission Receipt Confirmed',
+        `${updated.userId?.firstName} ${updated.userId?.lastName} confirmed receipt of commission for ${updated.leadId?.schoolName || 'a deal'}.`,
+        '/commissions'
+      );
+    }
 
     res.json(updated);
   } catch (error) {
