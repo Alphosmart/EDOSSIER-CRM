@@ -321,12 +321,23 @@ export default function CommissionsPage() {
                                 💸 Mark Disbursed
                               </button>
                             )}
-                            {/* Rep: Confirm receipt when Disbursed and is the owner */}
-                            {!isManagerOrAdmin && isOwner && c.status === 'Disbursed' && (
-                              <button onClick={() => handleConfirmReceipt(c._id)}
-                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
-                                ✓ I've Received This
-                              </button>
+                            {/* Rep: Receipt dropdown — shown when Disbursed (owner) or already Paid */}
+                            {!isManagerOrAdmin && isOwner && (c.status === 'Disbursed' || c.status === 'Paid') && (
+                              <select
+                                value={c.status === 'Paid' ? 'received' : 'not_received'}
+                                disabled={c.status === 'Paid'}
+                                onChange={e => {
+                                  if (e.target.value === 'received') handleConfirmReceipt(c._id);
+                                }}
+                                className={`px-2 py-1 text-xs rounded border ${
+                                  c.status === 'Paid'
+                                    ? 'bg-green-50 text-green-700 border-green-300 cursor-default'
+                                    : 'bg-white text-gray-700 border-gray-300 cursor-pointer hover:border-green-400'
+                                }`}
+                              >
+                                <option value="not_received">⏳ Not Received Yet</option>
+                                <option value="received">✓ Received</option>
+                              </select>
                             )}
                             {/* Admin can also force-confirm receipt if needed */}
                             {isAdmin && c.status === 'Disbursed' && (
