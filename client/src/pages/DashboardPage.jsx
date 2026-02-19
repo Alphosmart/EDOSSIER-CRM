@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid,
+  PolarAngleAxis
+} from 'recharts';
 import { dashboardService } from '../services/dashboardService';
 import { leadService } from '../services/leadService';
 import { useAuth } from '../context/AuthContext';
@@ -605,9 +610,9 @@ function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShow
             </div>
           )}
 
-          {/* ── Results table ── */}
+          {/* ── Loading ── */}
           {compareLoading && (
-            <div className="flex items-center justify-center py-6 text-sm text-gray-400">
+            <div className="flex items-center justify-center py-8 text-sm text-gray-400">
               <svg className="animate-spin w-5 h-5 mr-2 text-primary-500" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -616,72 +621,167 @@ function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShow
             </div>
           )}
 
-          {!compareLoading && compareData && (
-            <div className="overflow-x-auto">
-              {/* Period labels */}
-              <div className="flex items-center gap-3 mb-3 text-xs">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>
-                  <span className="font-semibold text-blue-700">{compareData.labels?.A || 'Period A'}</span>
-                  <span className="text-gray-400">({compA.from} → {compA.to})</span>
-                </span>
-                <span className="text-gray-300">vs</span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-gray-400 inline-block"></span>
-                  <span className="font-semibold text-gray-600">{compareData.labels?.B || 'Period B'}</span>
-                  <span className="text-gray-400">({compB.from} → {compB.to})</span>
-                </span>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-gray-500 uppercase border-b">
-                    <th className="py-2 pr-4">Metric</th>
-                    <th className="py-2 pr-4 text-blue-700">{compareData.labels?.A || 'Period A'}</th>
-                    <th className="py-2 pr-4 text-gray-500">{compareData.labels?.B || 'Period B'}</th>
-                    <th className="py-2">Change</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {METRICS.map(m => {
-                    const a   = compareData.periodA?.[m.key] ?? 0;
-                    const b   = compareData.periodB?.[m.key] ?? 0;
-                    const chg = compareData.changes?.[m.key];
-                    const up  = chg !== null && chg > 0;
-                    const dn  = chg !== null && chg < 0;
-                    const bad_if_up = m.key === 'closedLost';
-                    const good = bad_if_up ? dn : up;
-                    const bad  = bad_if_up ? up : dn;
-                    return (
-                      <tr key={m.key} className="hover:bg-gray-50">
-                        <td className="py-2.5 pr-4 font-medium text-gray-700">{m.label}</td>
-                        <td className="py-2.5 pr-4 font-bold text-blue-700">
-                          {m.currency ? fmt(a) : `${a}${m.suffix || ''}`}
-                        </td>
-                        <td className="py-2.5 pr-4 text-gray-500">
-                          {m.currency ? fmt(b) : `${b}${m.suffix || ''}`}
-                        </td>
-                        <td className="py-2.5">
-                          {chg === null || chg === undefined
-                            ? <span className="text-gray-400 text-xs">N/A</span>
-                            : (
-                              <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                                good ? 'bg-green-100 text-green-700' :
-                                bad  ? 'bg-red-100 text-red-700'   :
-                                'bg-gray-100 text-gray-500'
-                              }`}>
-                                {chg > 0 ? '↑' : chg < 0 ? '↓' : '–'}
-                                {' '}{Math.abs(chg)}%
-                              </span>
-                            )
-                          }
-                        </td>
+          {!compareLoading && compareData && (() => {
+            const labelA = compareData.labels?.A || 'Period A';
+            const labelB = compareData.labels?.B || 'Period B';
+            const pA = compareData.periodA || {};
+            const pB = compareData.periodB || {};
+
+            // Chart data sets
+            const countData = [
+              { metric: 'New Leads', [labelA]: pA.newLeads  || 0, [labelB]: pB.newLeads  || 0 },
+              { metric: 'Deals Won', [labelA]: pA.closedWon || 0, [labelB]: pB.closedWon || 0 },
+              { metric: 'Deals Lost',[labelA]: pA.closedLost|| 0, [labelB]: pB.closedLost|| 0 },
+              { metric: 'Win Rate',  [labelA]: pA.winRate   || 0, [labelB]: pB.winRate   || 0 },
+            ];
+            const revenueData = [
+              { metric: 'Revenue',   [labelA]: Math.round(pA.totalRevenue    || 0), [labelB]: Math.round(pB.totalRevenue    || 0) },
+              { metric: 'Pipeline',  [labelA]: Math.round(pA.pipelineValue   || 0), [labelB]: Math.round(pB.pipelineValue   || 0) },
+              { metric: 'Commission',[labelA]: Math.round(pA.totalCommission || 0), [labelB]: Math.round(pB.totalCommission || 0) },
+              { metric: 'Avg Deal',  [labelA]: Math.round(pA.avgDealSize     || 0), [labelB]: Math.round(pB.avgDealSize     || 0) },
+            ];
+            // Radar data
+            const maxRev = Math.max(pA.totalRevenue||1, pB.totalRevenue||1);
+            const maxPip = Math.max(pA.pipelineValue||1, pB.pipelineValue||1);
+            const maxNew = Math.max(pA.newLeads||1, pB.newLeads||1);
+            const maxWon = Math.max(pA.closedWon||1, pB.closedWon||1);
+            const radarData = [
+              { subject: 'Revenue',    [labelA]: Math.round((pA.totalRevenue||0)/maxRev*100),  [labelB]: Math.round((pB.totalRevenue||0)/maxRev*100) },
+              { subject: 'Pipeline',   [labelA]: Math.round((pA.pipelineValue||0)/maxPip*100), [labelB]: Math.round((pB.pipelineValue||0)/maxPip*100) },
+              { subject: 'New Leads',  [labelA]: Math.round((pA.newLeads||0)/maxNew*100),      [labelB]: Math.round((pB.newLeads||0)/maxNew*100) },
+              { subject: 'Deals Won',  [labelA]: Math.round((pA.closedWon||0)/maxWon*100),     [labelB]: Math.round((pB.closedWon||0)/maxWon*100) },
+              { subject: 'Win Rate',   [labelA]: Math.round(pA.winRate||0),                    [labelB]: Math.round(pB.winRate||0) },
+            ];
+
+            const fmtK = v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`;
+
+            return (
+              <div className="space-y-6">
+                {/* Period legend */}
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span>
+                    <span className="font-semibold text-blue-700">{labelA}</span>
+                    <span className="text-gray-400">({compA.from} → {compA.to})</span>
+                  </span>
+                  <span className="text-gray-300">vs</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-gray-400 inline-block"></span>
+                    <span className="font-semibold text-gray-600">{labelB}</span>
+                    <span className="text-gray-400">({compB.from} → {compB.to})</span>
+                  </span>
+                </div>
+
+                {/* Charts row */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                  {/* Chart 1: Activity counts */}
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Activity (Counts)</p>
+                    <div className="h-52">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={countData} barGap={2} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="metric" tick={{ fontSize: 10 }} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Bar dataKey={labelA} fill="#3B82F6" radius={[3,3,0,0]} />
+                          <Bar dataKey={labelB} fill="#9CA3AF" radius={[3,3,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Chart 2: Revenue metrics */}
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Revenue Metrics (USD)</p>
+                    <div className="h-52">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={revenueData} barGap={2} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="metric" tick={{ fontSize: 10 }} />
+                          <YAxis tickFormatter={fmtK} tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={v => [`$${Number(v).toLocaleString()}`, '']} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Bar dataKey={labelA} fill="#10B981" radius={[3,3,0,0]} />
+                          <Bar dataKey={labelB} fill="#6EE7B7" radius={[3,3,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Chart 3: Radar overview */}
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Overall Shape (% of max)</p>
+                    <div className="h-52">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart data={radarData}>
+                          <PolarGrid stroke="#e5e7eb" />
+                          <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+                          <Radar name={labelA} dataKey={labelA} stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
+                          <Radar name={labelB} dataKey={labelB} stroke="#9CA3AF" fill="#9CA3AF" fillOpacity={0.2} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Tooltip />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 uppercase border-b">
+                        <th className="py-2 pr-4">Metric</th>
+                        <th className="py-2 pr-4 text-blue-700">{labelA}</th>
+                        <th className="py-2 pr-4 text-gray-500">{labelB}</th>
+                        <th className="py-2">Change</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    </thead>
+                    <tbody className="divide-y">
+                      {METRICS.map(m => {
+                        const a   = pA[m.key] ?? 0;
+                        const b   = pB[m.key] ?? 0;
+                        const chg = compareData.changes?.[m.key];
+                        const up  = chg !== null && chg > 0;
+                        const dn  = chg !== null && chg < 0;
+                        const bad_if_up = m.key === 'closedLost';
+                        const good = bad_if_up ? dn : up;
+                        const bad  = bad_if_up ? up : dn;
+                        return (
+                          <tr key={m.key} className="hover:bg-gray-50">
+                            <td className="py-2.5 pr-4 font-medium text-gray-700">{m.label}</td>
+                            <td className="py-2.5 pr-4 font-bold text-blue-700">
+                              {m.currency ? fmt(a) : `${a}${m.suffix || ''}`}
+                            </td>
+                            <td className="py-2.5 pr-4 text-gray-500">
+                              {m.currency ? fmt(b) : `${b}${m.suffix || ''}`}
+                            </td>
+                            <td className="py-2.5">
+                              {chg === null || chg === undefined
+                                ? <span className="text-gray-400 text-xs">N/A</span>
+                                : (
+                                  <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                                    good ? 'bg-green-100 text-green-700' :
+                                    bad  ? 'bg-red-100 text-red-700'   :
+                                    'bg-gray-100 text-gray-500'
+                                  }`}>
+                                    {chg > 0 ? '↑' : chg < 0 ? '↓' : '–'}{Math.abs(chg)}%
+                                  </span>
+                                )
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
