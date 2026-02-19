@@ -89,6 +89,10 @@ const LeadSchema = new mongoose.Schema({
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   lga: { type: String },
 
+  // International fields (Layer 1 + Layer 2)
+  country: { type: String, default: 'Nigeria' },
+  currency: { type: String, default: 'NGN' },   // ISO 4217 code
+
   // Subscription & Recurring Revenue
   subscriptionType: {
     type: String,

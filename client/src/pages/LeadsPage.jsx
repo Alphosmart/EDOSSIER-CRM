@@ -7,7 +7,8 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import Pagination from '../components/common/Pagination';
 import { LEAD_STATUSES } from '../utils/constants';
 import { NIGERIAN_STATES } from '../utils/nigerianStatesLgas';
-import { formatNaira } from '../utils/formatCurrency';
+import { COUNTRY_NAMES } from '../utils/countries';
+import { formatNaira, formatCurrency } from '../utils/formatCurrency';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +27,7 @@ export default function LeadsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [territoryFilter, setTerritoryFilter] = useState('');
+  const [countryFilter, setCountryFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [viewMode, setViewMode] = useState('cards');
@@ -39,7 +41,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     loadLeads();
-  }, [page, statusFilter, territoryFilter]);
+  }, [page, statusFilter, territoryFilter, countryFilter]);
 
   const loadLeads = async () => {
     setLoading(true);
@@ -48,6 +50,7 @@ export default function LeadsPage() {
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
       if (territoryFilter) params.territory = territoryFilter;
+      if (countryFilter) params.country = countryFilter;
 
       const { data } = await leadService.getLeads(params);
       setLeads(data.leads);
@@ -252,13 +255,23 @@ export default function LeadsPage() {
             {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select
-            value={territoryFilter}
-            onChange={(e) => { setTerritoryFilter(e.target.value); setPage(1); }}
+            value={countryFilter}
+            onChange={(e) => { setCountryFilter(e.target.value); setTerritoryFilter(''); setPage(1); }}
             className="input-field w-auto"
           >
-            <option value="">All States</option>
-            {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            <option value="">All Countries</option>
+            {COUNTRY_NAMES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          {(countryFilter === 'Nigeria' || !countryFilter) && (
+            <select
+              value={territoryFilter}
+              onChange={(e) => { setTerritoryFilter(e.target.value); setPage(1); }}
+              className="input-field w-auto"
+            >
+              <option value="">All States</option>
+              {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
           <div className="flex border rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode('cards')}
@@ -324,7 +337,7 @@ export default function LeadsPage() {
                       onChange={(newStatus) => handleStatusChange(lead._id, newStatus)}
                     />
                   </td>
-                  <td className="py-3 text-right font-medium">{formatNaira(lead.negotiatedPrice || lead.proposedPrice)}</td>
+                  <td className="py-3 text-right font-medium">{formatCurrency(lead.negotiatedPrice || lead.proposedPrice, lead.currency || 'NGN')}</td>
                   <td className="py-3 text-right">{lead.probabilityOfClosing || 0}%</td>
                   <td className="py-3 text-sm">
                     {lead.assignedTo?.firstName} {lead.assignedTo?.lastName}

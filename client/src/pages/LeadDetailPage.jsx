@@ -7,7 +7,7 @@ import ActivityTimeline from '../components/leads/ActivityTimeline';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
-import { formatNaira } from '../utils/formatCurrency';
+import { formatCurrency, formatNaira } from '../utils/formatCurrency';
 import { formatDate, isOverdue } from '../utils/formatDate';
 import toast from 'react-hot-toast';
 import {
@@ -203,7 +203,7 @@ export default function LeadDetailPage() {
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Commission</p>
                 <p className="text-lg font-bold text-green-600 mt-1">
-                  {lead.commissionPercentage}%{lead.commissionAmount > 0 && ` (${formatNaira(lead.commissionAmount)})`}
+                  {lead.commissionPercentage}%{lead.commissionAmount > 0 && ` (${formatCurrency(lead.commissionAmount, lead.currency || 'NGN')})`}
                 </p>
               </div>
             </div>
@@ -237,8 +237,20 @@ export default function LeadDetailPage() {
               </div>
               <div className="flex items-start gap-1">
                 <HiOutlineLocationMarker className="w-4 h-4 text-gray-400 mt-0.5" />
-                <span>{[lead.address, lead.city, lead.state].filter(Boolean).join(', ') || '—'}</span>
+                <span>{[lead.address, lead.city, lead.state, lead.lga].filter(Boolean).join(', ') || '—'}</span>
               </div>
+              {lead.country && lead.country !== 'Nigeria' && (
+                <div>
+                  <span className="text-gray-500">Country:</span>
+                  <span className="ml-2 font-medium">{lead.country}</span>
+                </div>
+              )}
+              {lead.country === 'Nigeria' && lead.lga && (
+                <div>
+                  <span className="text-gray-500">LGA:</span>
+                  <span className="ml-2">{lead.lga}</span>
+                </div>
+              )}
               {lead.website && (
                 <div>
                   <span className="text-gray-500">Website:</span>
@@ -299,11 +311,11 @@ export default function LeadDetailPage() {
               </div>
               <div>
                 <span className="text-gray-500">Proposed Price:</span>
-                <span className="ml-2">{formatNaira(lead.proposedPrice)}</span>
+                <span className="ml-2">{formatCurrency(lead.proposedPrice, lead.currency || 'NGN')}</span>
               </div>
               <div>
                 <span className="text-gray-500">Negotiated Price:</span>
-                <span className="ml-2 font-bold">{formatNaira(lead.negotiatedPrice)}</span>
+                <span className="ml-2 font-bold">{formatCurrency(lead.negotiatedPrice, lead.currency || 'NGN')}</span>
               </div>
               <div>
                 <span className="text-gray-500">Payment Status:</span>
@@ -315,13 +327,13 @@ export default function LeadDetailPage() {
               {lead.amountPaid > 0 && (
                 <div>
                   <span className="text-gray-500">Amount Paid:</span>
-                  <span className="ml-2">{formatNaira(lead.amountPaid)}</span>
+                  <span className="ml-2">{formatCurrency(lead.amountPaid, lead.currency || 'NGN')}</span>
                 </div>
               )}
               {(lead.negotiatedPrice || 0) - (lead.amountPaid || 0) > 0 && (
                 <div>
                   <span className="text-gray-500">Outstanding:</span>
-                  <span className="ml-2 text-red-600 font-medium">{formatNaira((lead.negotiatedPrice || 0) - (lead.amountPaid || 0))}</span>
+                  <span className="ml-2 text-red-600 font-medium">{formatCurrency((lead.negotiatedPrice || 0) - (lead.amountPaid || 0), lead.currency || 'NGN')}</span>
                 </div>
               )}
               <div>

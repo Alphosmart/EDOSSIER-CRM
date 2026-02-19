@@ -6,10 +6,13 @@ import {
   SUBSCRIPTION_TYPES, SUBSCRIPTION_PLANS, STORAGE_SIZES
 } from '../../utils/constants';
 import { NIGERIAN_STATES, getLgasByState } from '../../utils/nigerianStatesLgas';
+import { COUNTRY_NAMES, getCurrencyByCountry, isNigeria } from '../../utils/countries';
+import { getCurrencySymbol } from '../../utils/formatCurrency';
 
 const initialFormData = {
   schoolName: '', schoolType: '', address: '', city: '', state: '',
   website: '', numberOfStudents: '',
+  country: 'Nigeria', currency: 'NGN', region: '',
   dateVisited: '', timeVisited: '', purposeOfVisit: '', leadSource: '',
   personMet: '', positionTitle: '', phoneNumber: '', emailAddress: '',
   whatsappNumber: '', gatekeeperName: '',
@@ -111,43 +114,85 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">Number of Students</label>
           <input type="number" name="numberOfStudents" value={formData.numberOfStudents} onChange={handleChange} className="input-field" />
         </div>
+        {/* Country selector */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-          <input name="city" value={formData.city} onChange={handleChange} className="input-field" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
           <select
-            name="state"
-            value={formData.state}
+            name="country"
+            value={formData.country}
             onChange={e => {
-              const selectedState = e.target.value;
+              const selectedCountry = e.target.value;
+              const { code } = getCurrencyByCountry(selectedCountry);
               setFormData(prev => ({
                 ...prev,
-                state: selectedState,
-                territory: selectedState,
-                lga: ''
+                country: selectedCountry,
+                currency: code,
+                state: '',
+                territory: '',
+                lga: '',
+                region: ''
               }));
             }}
             className="input-field"
           >
-            <option value="">Select State</option>
-            {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+            <option value="">Select Country</option>
+            {COUNTRY_NAMES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+        {/* City */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">LGA</label>
-          <select
-            name="lga"
-            value={formData.lga}
-            onChange={handleChange}
-            className="input-field"
-            disabled={!formData.state}
-          >
-            <option value="">{formData.state ? 'Select LGA' : 'Select state first'}</option>
-            {getLgasByState(formData.state).map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
+          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+          <input name="city" value={formData.city} onChange={handleChange} className="input-field" />
         </div>
+        {/* Nigeria: State + LGA dropdowns. Others: free-text region */}
+        {isNigeria(formData.country) ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+              <select
+                name="state"
+                value={formData.state}
+                onChange={e => {
+                  const selectedState = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    state: selectedState,
+                    territory: selectedState,
+                    lga: ''
+                  }));
+                }}
+                className="input-field"
+              >
+                <option value="">Select State</option>
+                {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">LGA</label>
+              <select
+                name="lga"
+                value={formData.lga}
+                onChange={handleChange}
+                className="input-field"
+                disabled={!formData.state}
+              >
+                <option value="">{formData.state ? 'Select LGA' : 'Select state first'}</option>
+                {getLgasByState(formData.state).map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+          </>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Region / State</label>
+            <input
+              name="region"
+              value={formData.region || formData.state}
+              onChange={e => setFormData(prev => ({ ...prev, region: e.target.value, state: e.target.value, territory: e.target.value }))}
+              className="input-field"
+              placeholder="e.g., Lagos, Greater Accra"
+            />
+          </div>
+        )}
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
           <input name="address" value={formData.address} onChange={handleChange} className="input-field" />
@@ -254,11 +299,11 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
           <input name="proposedPackage" value={formData.proposedPackage} onChange={handleChange} className="input-field" placeholder="e.g., Basic, Premium, Enterprise" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Price (₦)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Price ({getCurrencySymbol(formData.currency)})</label>
           <input type="number" name="proposedPrice" value={formData.proposedPrice} onChange={handleChange} className="input-field" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Negotiated Price (₦)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Negotiated Price ({getCurrencySymbol(formData.currency)})</label>
           <input type="number" name="negotiatedPrice" value={formData.negotiatedPrice} onChange={handleChange} className="input-field" />
         </div>
         <div>
@@ -276,7 +321,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
           )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (₦)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid ({getCurrencySymbol(formData.currency)})</label>
           {isAdminOrManager ? (
             <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} className="input-field" />
           ) : (

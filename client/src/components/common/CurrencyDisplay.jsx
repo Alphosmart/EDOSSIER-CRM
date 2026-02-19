@@ -1,9 +1,14 @@
-import { formatNaira } from '../../utils/formatCurrency';
+import { formatCurrency } from '../../utils/formatCurrency';
 
-export default function CurrencyDisplay({ amount, className = '' }) {
+/**
+ * Displays a monetary amount formatted for the given currency.
+ * @param {number} amount
+ * @param {string} currency  ISO 4217 code (default 'NGN')
+ */
+export default function CurrencyDisplay({ amount, currency = 'NGN', className = '' }) {
   return (
     <span className={className}>
-      {formatNaira(amount)}
+      {formatCurrency(amount, currency)}
     </span>
   );
 }

@@ -30,10 +30,11 @@ exports.getLeads = async (req, res) => {
     const filter = filterLeadsByRole(req.user);
 
     // Query params for filtering
-    const { status, territory, search, page = 1, limit = 50 } = req.query;
+    const { status, territory, search, country, page = 1, limit = 50 } = req.query;
 
     if (status) filter.currentStatus = status;
     if (territory) filter.territory = territory;
+    if (country) filter.country = country;
     if (search) {
       filter.$or = [
         { schoolName: { $regex: search, $options: 'i' } },
@@ -110,6 +111,10 @@ exports.createLead = async (req, res) => {
     if (!leadData.territory && req.user.territory) {
       leadData.territory = req.user.territory;
     }
+
+    // Default country and currency
+    if (!leadData.country) leadData.country = 'Nigeria';
+    if (!leadData.currency) leadData.currency = 'NGN';
 
     // Commission rate:
     // - Reps always get their own default rate (they can't self-inflate)
