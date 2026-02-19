@@ -61,10 +61,12 @@ export default function DashboardPage() {
   const [compareData, setCompareData] = useState(null);
   const [compareLoading, setCompareLoading] = useState(false);
 
-  const runComparison = async () => {
+  const runComparison = async (aOverride, bOverride) => {
+    const a = aOverride || compA;
+    const b = bOverride || compB;
     setCompareLoading(true);
     try {
-      const { data } = await dashboardService.compareStats(compA.from, compA.to, compB.from, compB.to);
+      const { data } = await dashboardService.compareStats(a.from, a.to, b.from, b.to);
       setCompareData(data);
     } catch (e) {}
     setCompareLoading(false);
@@ -395,19 +397,109 @@ function TargetCard({ target, actual, fmt, rateMap, displayCurrency }) {
 // Stats Comparison panel
 // ──────────────────────────────────────────────────────────────────────────────────
 function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShowCompare, runComparison, compareData, compareLoading, fmt }) {
+  const [mode, setMode] = useState('presets'); // 'presets' | 'custom'
+  const [activePreset, setActivePreset] = useState(null);
+
   const METRICS = [
-    { key: 'newLeads',       label: 'New Leads',         currency: false },
-    { key: 'closedWon',     label: 'Deals Won',          currency: false },
-    { key: 'closedLost',    label: 'Deals Lost',         currency: false },
-    { key: 'winRate',       label: 'Win Rate',           currency: false, suffix: '%' },
-    { key: 'totalRevenue',  label: 'Revenue',            currency: true },
-    { key: 'pipelineValue', label: 'Pipeline Value',     currency: true },
-    { key: 'totalCommission', label: 'Commission',       currency: true },
-    { key: 'avgDealSize',   label: 'Avg Deal Size',      currency: true },
+    { key: 'newLeads',        label: 'New Leads',       currency: false },
+    { key: 'closedWon',       label: 'Deals Won',       currency: false },
+    { key: 'closedLost',      label: 'Deals Lost',      currency: false },
+    { key: 'winRate',         label: 'Win Rate',        currency: false, suffix: '%' },
+    { key: 'totalRevenue',    label: 'Revenue',         currency: true },
+    { key: 'pipelineValue',   label: 'Pipeline Value',  currency: true },
+    { key: 'totalCommission', label: 'Commission',      currency: true },
+    { key: 'avgDealSize',     label: 'Avg Deal Size',   currency: true },
   ];
+
+  // ── Date helpers ──
+  const iso = d => d.toISOString().slice(0, 10);
+
+  const buildPresets = () => {
+    const now = new Date();
+    const today = iso(now);
+
+    // Day
+    const yd = new Date(now); yd.setDate(yd.getDate() - 1);
+    const yesterday = iso(yd);
+
+    // Week (Mon-based)
+    const dow = (now.getDay() + 6) % 7; // 0=Mon
+    const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - dow);
+    const lastWeekStart = new Date(thisWeekStart); lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+    const lastWeekEnd   = new Date(thisWeekStart); lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+
+    // Month
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    // Quarter
+    const q = Math.floor(now.getMonth() / 3);
+    const thisQStart = new Date(now.getFullYear(), q * 3, 1);
+    const lastQStart = new Date(now.getFullYear(), q * 3 - 3, 1);
+    const lastQEnd   = new Date(now.getFullYear(), q * 3, 0);
+
+    // Year
+    const thisYearStart = new Date(now.getFullYear(), 0, 1);
+    const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
+    const lastYearEnd   = new Date(now.getFullYear() - 1, 11, 31);
+
+    return [
+      {
+        key: 'day',
+        label: 'Day',
+        sublabel: 'Today vs Yesterday',
+        a: { from: today,               to: today },
+        b: { from: yesterday,           to: yesterday },
+        labelA: 'Today', labelB: 'Yesterday',
+      },
+      {
+        key: 'week',
+        label: 'Week',
+        sublabel: 'This week vs Last week',
+        a: { from: iso(thisWeekStart),  to: today },
+        b: { from: iso(lastWeekStart),  to: iso(lastWeekEnd) },
+        labelA: 'This Week', labelB: 'Last Week',
+      },
+      {
+        key: 'month',
+        label: 'Month',
+        sublabel: 'This month vs Last month',
+        a: { from: iso(thisMonthStart), to: today },
+        b: { from: iso(lastMonthStart), to: iso(lastMonthEnd) },
+        labelA: 'This Month', labelB: 'Last Month',
+      },
+      {
+        key: 'quarter',
+        label: 'Quarter',
+        sublabel: `Q${q + 1} vs Q${q === 0 ? 4 : q}`,
+        a: { from: iso(thisQStart),     to: today },
+        b: { from: iso(lastQStart),     to: iso(lastQEnd) },
+        labelA: `Q${q + 1} ${now.getFullYear()}`, labelB: `Q${q === 0 ? 4 : q} ${q === 0 ? now.getFullYear() - 1 : now.getFullYear()}`,
+      },
+      {
+        key: 'year',
+        label: 'Year',
+        sublabel: `${now.getFullYear()} vs ${now.getFullYear() - 1}`,
+        a: { from: iso(thisYearStart),  to: today },
+        b: { from: iso(lastYearStart),  to: iso(lastYearEnd) },
+        labelA: `${now.getFullYear()}`, labelB: `${now.getFullYear() - 1}`,
+      },
+    ];
+  };
+
+  const handlePreset = (preset) => {
+    setActivePreset(preset.key);
+    setCompA(preset.a);
+    setCompB(preset.b);
+    runComparison(preset.a, preset.b);
+  };
+
+  const PRESETS = buildPresets();
 
   return (
     <div className="card">
+      {/* Header toggle */}
       <button
         onClick={() => setShowCompare(s => !s)}
         className="w-full flex items-center justify-between"
@@ -415,39 +507,134 @@ function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShow
         <div className="flex items-center gap-2">
           <HiOutlineSwitchHorizontal className="w-5 h-5 text-primary-600" />
           <span className="font-semibold text-gray-800">Compare Periods</span>
+          {activePreset && !showCompare && (
+            <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">
+              {PRESETS.find(p => p.key === activePreset)?.label}
+            </span>
+          )}
         </div>
         <span className="text-xs text-gray-400">{showCompare ? 'Hide ▲' : 'Show ▼'}</span>
       </button>
 
       {showCompare && (
         <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Period A */}
-            <div className="bg-blue-50 rounded-lg p-3">
-              <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Period A (Current)</p>
-              <div className="flex flex-col gap-2">
-                <input type="date" value={compA.from} onChange={e => setCompA(p => ({...p, from: e.target.value}))} className="input-field text-sm py-1.5" />
-                <input type="date" value={compA.to} onChange={e => setCompA(p => ({...p, to: e.target.value}))} className="input-field text-sm py-1.5" />
-              </div>
-            </div>
-            {/* Period B */}
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Period B (Compare to)</p>
-              <div className="flex flex-col gap-2">
-                <input type="date" value={compB.from} onChange={e => setCompB(p => ({...p, from: e.target.value}))} className="input-field text-sm py-1.5" />
-                <input type="date" value={compB.to} onChange={e => setCompB(p => ({...p, to: e.target.value}))} className="input-field text-sm py-1.5" />
-              </div>
-            </div>
-          </div>
-          <button onClick={runComparison} disabled={compareLoading} className="btn-primary text-sm">
-            {compareLoading ? 'Comparing…' : '📊 Run Comparison'}
-          </button>
 
-          {compareData && (
-            <div className="overflow-x-auto mt-2">
+          {/* Mode tabs */}
+          <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
+            <button
+              onClick={() => setMode('presets')}
+              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-all ${
+                mode === 'presets' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              Quick Presets
+            </button>
+            <button
+              onClick={() => setMode('custom')}
+              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-all ${
+                mode === 'custom' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              Custom Dates
+            </button>
+          </div>
+
+          {/* ── Quick Presets ── */}
+          {mode === 'presets' && (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {PRESETS.map(preset => (
+                <button
+                  key={preset.key}
+                  onClick={() => handlePreset(preset)}
+                  disabled={compareLoading}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
+                    activePreset === preset.key
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-primary-50 text-gray-600'
+                  }`}
+                >
+                  <span className="text-base font-bold">
+                    {preset.key === 'day'     ? '📅' :
+                     preset.key === 'week'    ? '📆' :
+                     preset.key === 'month'   ? '🗓️' :
+                     preset.key === 'quarter' ? '📊' : '📈'}
+                  </span>
+                  <span className="text-sm font-semibold mt-1">{preset.label}</span>
+                  <span className="text-[10px] text-center text-gray-400 mt-0.5 leading-tight">{preset.sublabel}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── Custom Dates ── */}
+          {mode === 'custom' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Period A (Current)</p>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-500 w-8">From</label>
+                      <input type="date" value={compA.from} onChange={e => setCompA(p => ({...p, from: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-500 w-8">To</label>
+                      <input type="date" value={compA.to} onChange={e => setCompA(p => ({...p, to: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Period B (Compare to)</p>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-500 w-8">From</label>
+                      <input type="date" value={compB.from} onChange={e => setCompB(p => ({...p, from: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-500 w-8">To</label>
+                      <input type="date" value={compB.to} onChange={e => setCompB(p => ({...p, to: e.target.value}))} className="input-field text-sm py-1.5 flex-1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => { setActivePreset(null); runComparison(); }}
+                disabled={compareLoading}
+                className="btn-primary text-sm"
+              >
+                {compareLoading ? 'Comparing…' : '📊 Run Comparison'}
+              </button>
+            </div>
+          )}
+
+          {/* ── Results table ── */}
+          {compareLoading && (
+            <div className="flex items-center justify-center py-6 text-sm text-gray-400">
+              <svg className="animate-spin w-5 h-5 mr-2 text-primary-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              Running comparison…
+            </div>
+          )}
+
+          {!compareLoading && compareData && (
+            <div className="overflow-x-auto">
+              {/* Period labels */}
+              <div className="flex items-center gap-3 mb-3 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>
+                  <span className="font-semibold text-blue-700">{compareData.labels?.A || 'Period A'}</span>
+                  <span className="text-gray-400">({compA.from} → {compA.to})</span>
+                </span>
+                <span className="text-gray-300">vs</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-gray-400 inline-block"></span>
+                  <span className="font-semibold text-gray-600">{compareData.labels?.B || 'Period B'}</span>
+                  <span className="text-gray-400">({compB.from} → {compB.to})</span>
+                </span>
+              </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-gray-500 uppercase">
+                  <tr className="text-left text-xs text-gray-500 uppercase border-b">
                     <th className="py-2 pr-4">Metric</th>
                     <th className="py-2 pr-4 text-blue-700">{compareData.labels?.A || 'Period A'}</th>
                     <th className="py-2 pr-4 text-gray-500">{compareData.labels?.B || 'Period B'}</th>
@@ -456,29 +643,37 @@ function CompareSection({ compA, setCompA, compB, setCompB, showCompare, setShow
                 </thead>
                 <tbody className="divide-y">
                   {METRICS.map(m => {
-                    const a = compareData.periodA?.[m.key] ?? 0;
-                    const b = compareData.periodB?.[m.key] ?? 0;
+                    const a   = compareData.periodA?.[m.key] ?? 0;
+                    const b   = compareData.periodB?.[m.key] ?? 0;
                     const chg = compareData.changes?.[m.key];
-                    const up = chg !== null && chg > 0;
-                    const dn = chg !== null && chg < 0;
-                    const lostKey = m.key === 'closedLost'; // losing more is bad
-                    const good = lostKey ? dn : up;
-                    const bad  = lostKey ? up : dn;
+                    const up  = chg !== null && chg > 0;
+                    const dn  = chg !== null && chg < 0;
+                    const bad_if_up = m.key === 'closedLost';
+                    const good = bad_if_up ? dn : up;
+                    const bad  = bad_if_up ? up : dn;
                     return (
                       <tr key={m.key} className="hover:bg-gray-50">
-                        <td className="py-2 pr-4 font-medium text-gray-700">{m.label}</td>
-                        <td className="py-2 pr-4 font-bold text-blue-700">{m.currency ? fmt(a) : `${a}${m.suffix || ''}`}</td>
-                        <td className="py-2 pr-4 text-gray-500">{m.currency ? fmt(b) : `${b}${m.suffix || ''}`}</td>
-                        <td className="py-2">
-                          {chg === null ? <span className="text-gray-400 text-xs">N/A</span> : (
-                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                              good ? 'bg-green-100 text-green-700' :
-                              bad  ? 'bg-red-100 text-red-700' :
-                              'bg-gray-100 text-gray-500'
-                            }`}>
-                              {chg > 0 ? '+' : ''}{chg}%
-                            </span>
-                          )}
+                        <td className="py-2.5 pr-4 font-medium text-gray-700">{m.label}</td>
+                        <td className="py-2.5 pr-4 font-bold text-blue-700">
+                          {m.currency ? fmt(a) : `${a}${m.suffix || ''}`}
+                        </td>
+                        <td className="py-2.5 pr-4 text-gray-500">
+                          {m.currency ? fmt(b) : `${b}${m.suffix || ''}`}
+                        </td>
+                        <td className="py-2.5">
+                          {chg === null || chg === undefined
+                            ? <span className="text-gray-400 text-xs">N/A</span>
+                            : (
+                              <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                                good ? 'bg-green-100 text-green-700' :
+                                bad  ? 'bg-red-100 text-red-700'   :
+                                'bg-gray-100 text-gray-500'
+                              }`}>
+                                {chg > 0 ? '↑' : chg < 0 ? '↓' : '–'}
+                                {' '}{Math.abs(chg)}%
+                              </span>
+                            )
+                          }
                         </td>
                       </tr>
                     );
