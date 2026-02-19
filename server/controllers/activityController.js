@@ -1,10 +1,26 @@
 const Activity = require('../models/Activity');
+const Lead = require('../models/Lead');
+
+// Helper: verify a sales_rep is allowed to access a lead
+const canAccessLead = async (user, leadId) => {
+  if (['admin', 'manager'].includes(user.role)) return true;
+  const lead = await Lead.findById(leadId).select('assignedTo territory');
+  if (!lead) return false;
+  if (user.role === 'team_lead') return lead.territory === user.territory;
+  // sales_rep — must be the assigned rep
+  return lead.assignedTo && lead.assignedTo.equals(user._id);
+};
 
 // @desc    Get activities for a lead
 // @route   GET /api/activities/:leadId
 // @access  Private
 exports.getActivities = async (req, res) => {
   try {
+    const allowed = await canAccessLead(req.user, req.params.leadId);
+    if (!allowed) {
+      return res.status(403).json({ message: 'Not authorized to view activities for this lead' });
+    }
+
     const activities = await Activity.find({ leadId: req.params.leadId })
       .populate('userId', 'firstName lastName')
       .sort({ createdAt: -1 });
@@ -20,6 +36,14 @@ exports.getActivities = async (req, res) => {
 // @access  Private
 exports.createActivity = async (req, res) => {
   try {
+    const { leadId } = req.body;
+    if (leadId) {
+      const allowed = await canAccessLead(req.user, leadId);
+      if (!allowed) {
+        return res.status(403).json({ message: 'Not authorized to log activity on this lead' });
+      }
+    }
+
     const activityData = {
       ...req.body,
       userId: req.user._id

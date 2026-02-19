@@ -8,16 +8,17 @@ const path = require('path');
 
 // Helper: filter leads by user role
 const filterLeadsByRole = (user) => {
+  const base = { isDeleted: { $ne: true } };
   switch (user.role) {
     case 'sales_rep':
-      return { assignedTo: user._id };
+      return { ...base, assignedTo: user._id };
     case 'team_lead':
-      return { territory: user.territory };
+      return { ...base, territory: user.territory };
     case 'manager':
     case 'admin':
-      return {};
+      return base;
     default:
-      return { assignedTo: user._id };
+      return { ...base, assignedTo: user._id };
   }
 };
 
@@ -421,6 +422,14 @@ exports.addAttachment = async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ message: 'Lead not found' });
+
+    // Sales reps can only attach files to their own leads
+    if (req.user.role === 'sales_rep' && !lead.assignedTo.equals(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized to modify this lead' });
+    }
+    if (req.user.role === 'team_lead' && lead.territory !== req.user.territory) {
+      return res.status(403).json({ message: 'Not authorized to modify this lead' });
+    }
 
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 

@@ -103,9 +103,14 @@ exports.deleteUser = async (req, res) => {
 
 // @desc    Get user performance
 // @route   GET /api/users/:id/performance
-// @access  Admin/Manager/Self
+// @access  Admin/Manager/Self only
 exports.getUserPerformance = async (req, res) => {
   try {
+    // Sales reps may only view their own performance
+    if (req.user.role === 'sales_rep' && req.params.id !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to view another user\'s performance' });
+    }
+
     const userId = req.params.id;
     const leads = await Lead.find({ assignedTo: userId });
 
