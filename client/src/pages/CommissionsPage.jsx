@@ -2,36 +2,104 @@ import { useState, useEffect } from 'react';
 import { commissionService } from '../services/commissionService';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import StatusBadge from '../components/common/StatusBadge';
-import { formatNaira } from '../utils/formatCurrency';
+import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate } from '../utils/formatDate';
 import toast from 'react-hot-toast';
 import {
   HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineCheckCircle,
-  HiOutlineCheck, HiOutlineBanknotes
+  HiOutlineCheck, HiOutlineBanknotes, HiOutlineXMark
 } from 'react-icons/hi2';
 
+// ── Status badge ──────────────────────────────────────────────────────────────
+function CommissionBadge({ status }) {
+  const styles = {
+    Pending:   'bg-yellow-100 text-yellow-800',
+    Approved:  'bg-blue-100 text-blue-800',
+    Disbursed: 'bg-orange-100 text-orange-800',
+    Paid:      'bg-green-100 text-green-800',
+  };
+  return (
+    <span className={`px-2 py-1 text-xs rounded-full font-medium ${styles[status] || 'bg-gray-100 text-gray-700'}`}>
+      {status === 'Paid' ? 'Confirmed Paid' : status}
+    </span>
+  );
+}
+
+// ── Disburse modal ────────────────────────────────────────────────────────────
+function DisburseModal({ commission, onClose, onConfirm }) {
+  const [ref, setRef] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await onConfirm(commission._id, ref);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h3 className="text-lg font-semibold">Mark Commission as Disbursed</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100">
+            <HiOutlineXMark className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-1">
+            <p><span className="text-gray-500">School:</span> <span className="font-medium">{commission.leadId?.schoolName}</span></p>
+            <p><span className="text-gray-500">Rep:</span> <span className="font-medium">{commission.userId?.firstName} {commission.userId?.lastName}</span></p>
+            <p><span className="text-gray-500">Amount:</span> <span className="font-bold text-green-700">{formatCurrency(commission.commissionAmount, 'USD')}</span></p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Payment Reference <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={ref}
+              onChange={e => setRef(e.target.value)}
+              className="input-field"
+              placeholder="e.g., bank transfer ref, receipt number…"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary flex-1">
+              {saving ? 'Saving…' : 'Confirm Disbursed'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function CommissionsPage() {
   const { user, hasRole } = useAuth();
+  const isManagerOrAdmin = hasRole('manager', 'admin');
+  const isAdmin = hasRole('admin');
+
   const [commissions, setCommissions] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const [tab, setTab] = useState('list'); // list | summary
+  const [tab, setTab] = useState('list');
+  const [disburseTarget, setDisburseTarget] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
       const [commRes, sumRes] = await Promise.all([
-        hasRole('manager', 'admin') ? commissionService.getAll() : commissionService.getMy(),
+        isManagerOrAdmin ? commissionService.getAll() : commissionService.getMy(),
         commissionService.getSummary()
       ]);
       setCommissions(commRes.data);
       setSummary(sumRes.data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load commissions');
     } finally {
       setLoading(false);
@@ -39,62 +107,101 @@ export default function CommissionsPage() {
   };
 
   const handleApprove = async (id) => {
+    if (!window.confirm('Approve this commission?')) return;
     try {
       await commissionService.approve(id);
-      toast.success('Commission approved');
+      toast.success('Commission approved ✓');
       loadData();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to approve');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to approve');
     }
   };
 
-  const handleDisburse = async (id) => {
-    if (!window.confirm('Mark this commission as disbursed (payment sent)?')) return;
+  const handleDisburse = async (id, paymentReference) => {
     try {
-      await commissionService.disburse(id);
-      toast.success('Commission marked as disbursed — awaiting marketer confirmation');
+      await commissionService.disburse(id, { paymentReference });
+      toast.success('Marked as disbursed — rep will confirm receipt');
+      setDisburseTarget(null);
       loadData();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to disburse');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to disburse');
     }
   };
 
-  const handleConfirm = async (id) => {
-    if (!window.confirm('Confirm that you have received this commission payment?')) return;
+  const handleConfirmReceipt = async (id) => {
+    if (!window.confirm('Confirm that you personally received this commission payment?')) return;
     try {
       await commissionService.confirm(id);
-      toast.success('Payment receipt confirmed');
+      toast.success('Payment receipt confirmed ✓');
       loadData();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to confirm receipt');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to confirm receipt');
     }
   };
 
   const filtered = filter === 'all' ? commissions : commissions.filter(c => c.status === filter);
+  const FILTERS = ['all', 'Pending', 'Approved', 'Disbursed', 'Paid'];
 
   if (loading) return <LoadingSpinner size="lg" />;
 
   const summaryCards = summary ? [
-    { label: 'Total Earned', value: formatNaira(summary.totalAmount || 0), icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
-    { label: 'Pending', value: formatNaira(summary.pending?.amount || 0), icon: HiOutlineClock, color: 'bg-yellow-50 text-yellow-600' },
-    { label: 'Approved', value: formatNaira(summary.approved?.amount || 0), icon: HiOutlineCheckCircle, color: 'bg-green-50 text-green-600' },
-    { label: 'Disbursed', value: formatNaira(summary.disbursed?.amount || 0), icon: HiOutlineBanknotes, color: 'bg-orange-50 text-orange-600' },
-    { label: 'Confirmed Paid', value: formatNaira(summary.paid?.amount || 0), icon: HiOutlineCheck, color: 'bg-purple-50 text-purple-600' },
+    { label: 'Total Earned',   value: formatCurrency(summary.totalAmount || 0, 'USD'),         icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
+    { label: 'Pending',        value: formatCurrency(summary.pending?.amount || 0, 'USD'),      icon: HiOutlineClock,          color: 'bg-yellow-50 text-yellow-600' },
+    { label: 'Approved',       value: formatCurrency(summary.approved?.amount || 0, 'USD'),     icon: HiOutlineCheckCircle,    color: 'bg-sky-50 text-sky-600' },
+    { label: 'Disbursed',      value: formatCurrency(summary.disbursed?.amount || 0, 'USD'),    icon: HiOutlineBanknotes,      color: 'bg-orange-50 text-orange-600' },
+    { label: 'Confirmed Paid', value: formatCurrency(summary.paid?.amount || 0, 'USD'),         icon: HiOutlineCheck,          color: 'bg-green-50 text-green-600' },
   ] : [];
+
+  // ── Workflow steps banner ────────────────────────────────────────────────────
+  const steps = [
+    { key: 'Pending',   label: 'Pending',   by: 'Auto-created' },
+    { key: 'Approved',  label: 'Approved',  by: 'Manager / Admin' },
+    { key: 'Disbursed', label: 'Disbursed', by: 'Admin' },
+    { key: 'Paid',      label: 'Confirmed', by: 'Sales Rep' },
+  ];
+  const stepColors = {
+    Pending: 'bg-yellow-100 text-yellow-800',
+    Approved: 'bg-sky-100 text-sky-800',
+    Disbursed: 'bg-orange-100 text-orange-800',
+    Paid: 'bg-green-100 text-green-800',
+  };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="page-title">Commissions</h1>
+        <div>
+          <h1 className="page-title">Commissions</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Track approval, disbursement and receipt of commission payments</p>
+        </div>
         <div className="flex bg-gray-100 rounded-lg p-1">
-          <button
-            onClick={() => setTab('list')}
-            className={`px-3 py-1 text-sm rounded-md ${tab === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
-          >List</button>
-          <button
-            onClick={() => setTab('summary')}
-            className={`px-3 py-1 text-sm rounded-md ${tab === 'summary' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
-          >Summary</button>
+          <button onClick={() => setTab('list')}
+            className={`px-3 py-1 text-sm rounded-md ${tab === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+            List
+          </button>
+          <button onClick={() => setTab('summary')}
+            className={`px-3 py-1 text-sm rounded-md ${tab === 'summary' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+            Summary
+          </button>
+        </div>
+      </div>
+
+      {/* Workflow Steps Banner */}
+      <div className="card py-3">
+        <div className="flex items-center justify-between gap-1">
+          {steps.map((step, i) => (
+            <div key={step.key} className="flex items-center gap-1 flex-1">
+              <div className="flex-1 text-center">
+                <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${stepColors[step.key]}`}>
+                  {step.label}
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">{step.by}</p>
+              </div>
+              {i < steps.length - 1 && (
+                <div className="text-gray-300 text-xl font-light self-start mt-1">›</div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -106,8 +213,8 @@ export default function CommissionsPage() {
               <card.icon className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">{card.label}</p>
-              <p className="text-lg font-bold text-gray-900">{card.value}</p>
+              <p className="text-xs text-gray-500">{card.label}</p>
+              <p className="text-base font-bold text-gray-900">{card.value}</p>
             </div>
           </div>
         ))}
@@ -115,89 +222,124 @@ export default function CommissionsPage() {
 
       {tab === 'list' && (
         <>
-          {/* Filters */}
+          {/* Filter Tabs */}
           <div className="flex gap-2 flex-wrap">
-            {['all', 'Pending', 'Approved', 'Disbursed', 'Paid'].map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
+            {FILTERS.map(f => (
+              <button key={f} onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 text-sm rounded-lg ${
                   filter === f ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
+                }`}>
                 {f === 'all' ? 'All' : f} ({f === 'all' ? commissions.length : commissions.filter(c => c.status === f).length})
               </button>
             ))}
           </div>
 
-          {/* Commission List */}
+          {/* Commission Table */}
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 text-left text-gray-500 uppercase text-xs">
                     <th className="px-4 py-3">School</th>
-                    {hasRole('manager', 'admin') && <th className="px-4 py-3">Rep</th>}
-                    <th className="px-4 py-3">Deal Value</th>
-                    <th className="px-4 py-3">Rate</th>
-                    <th className="px-4 py-3">Commission</th>
+                    {isManagerOrAdmin && <th className="px-4 py-3">Rep</th>}
+                    <th className="px-4 py-3 text-right">Deal Value</th>
+                    <th className="px-4 py-3 text-center">Rate</th>
+                    <th className="px-4 py-3 text-right">Commission</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Audit Trail</th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {filtered.length === 0 ? (
-                    <tr><td colSpan="8" className="px-4 py-8 text-center text-gray-500">No commissions found</td></tr>
-                  ) : filtered.map(c => (
-                    <tr key={c._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{c.leadId?.schoolName || 'N/A'}</td>
-                      {hasRole('manager', 'admin') && (
-                        <td className="px-4 py-3">{c.userId?.firstName} {c.userId?.lastName}</td>
-                      )}
-                      <td className="px-4 py-3">{formatNaira(c.dealAmount)}</td>
-                      <td className="px-4 py-3">{c.commissionPercentage}%</td>
-                      <td className="px-4 py-3 font-bold text-green-600">{formatNaira(c.commissionAmount)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                          c.status === 'Paid' ? 'bg-green-100 text-green-800' :
-                          c.status === 'Disbursed' ? 'bg-orange-100 text-orange-800' :
-                          c.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>{c.status === 'Paid' ? 'Confirmed Paid' : c.status}</span>
+                    <tr>
+                      <td colSpan={isManagerOrAdmin ? 8 : 7} className="px-4 py-10 text-center text-gray-400">
+                        No commissions found
                       </td>
-                      <td className="px-4 py-3 text-gray-500">{formatDate(c.createdAt)}</td>
-                      {hasRole('manager', 'admin') && (
+                    </tr>
+                  ) : filtered.map(c => {
+                    const isOwner = c.userId?._id === user?._id || c.userId === user?._id;
+                    return (
+                      <tr key={c._id} className="hover:bg-gray-50 align-top">
+                        <td className="px-4 py-3 font-medium">
+                          {c.leadId?.schoolName || 'N/A'}
+                          {c.leadId?.schoolId && <p className="text-xs text-gray-400">{c.leadId.schoolId}</p>}
+                        </td>
+                        {isManagerOrAdmin && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {c.userId?.firstName} {c.userId?.lastName}
+                            {c.userId?.territory && <p className="text-xs text-gray-400">{c.userId.territory}</p>}
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-right">{formatCurrency(c.dealAmount, 'USD')}</td>
+                        <td className="px-4 py-3 text-center">{c.commissionPercentage}%</td>
+                        <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(c.commissionAmount, 'USD')}</td>
+                        <td className="px-4 py-3"><CommissionBadge status={c.status} /></td>
+
+                        {/* Audit trail */}
+                        <td className="px-4 py-3 text-xs text-gray-500 space-y-0.5 min-w-[180px]">
+                          <p className="text-gray-400">{formatDate(c.createdAt)}</p>
+                          {c.approvedBy && (
+                            <p>
+                              <span className="text-sky-600 font-medium">Approved</span>{' '}
+                              by {c.approvedBy.firstName} {c.approvedBy.lastName}
+                              {c.approvedDate && <span className="ml-1 text-gray-400">· {formatDate(c.approvedDate)}</span>}
+                            </p>
+                          )}
+                          {c.disbursedBy && (
+                            <p>
+                              <span className="text-orange-600 font-medium">Disbursed</span>{' '}
+                              by {c.disbursedBy.firstName} {c.disbursedBy.lastName}
+                              {c.disbursedDate && <span className="ml-1 text-gray-400">· {formatDate(c.disbursedDate)}</span>}
+                            </p>
+                          )}
+                          {c.paymentReference && (
+                            <p className="font-mono text-gray-600">Ref: {c.paymentReference}</p>
+                          )}
+                          {c.confirmedBy && (
+                            <p>
+                              <span className="text-green-600 font-medium">Receipt confirmed</span>
+                              {c.confirmedDate && <span className="ml-1 text-gray-400">· {formatDate(c.confirmedDate)}</span>}
+                            </p>
+                          )}
+                        </td>
+
+                        {/* Actions — single <td> always rendered */}
                         <td className="px-4 py-3">
-                          <div className="flex gap-1">
-                            {c.status === 'Pending' && hasRole('manager', 'admin') && (
+                          <div className="flex flex-col gap-1">
+                            {/* Manager or Admin: Approve when Pending */}
+                            {isManagerOrAdmin && c.status === 'Pending' && (
                               <button onClick={() => handleApprove(c._id)}
-                                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
-                                Approve
+                                className="px-2 py-1 text-xs bg-sky-600 text-white rounded hover:bg-sky-700 whitespace-nowrap">
+                                ✓ Approve
                               </button>
                             )}
-                            {c.status === 'Approved' && hasRole('admin') && (
-                              <button onClick={() => handleDisburse(c._id)}
-                                className="px-2 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700">
-                                Mark Disbursed
+                            {/* Admin: Disburse when Approved */}
+                            {isAdmin && c.status === 'Approved' && (
+                              <button onClick={() => setDisburseTarget(c)}
+                                className="px-2 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 whitespace-nowrap">
+                                💸 Mark Disbursed
+                              </button>
+                            )}
+                            {/* Rep: Confirm receipt when Disbursed and is the owner */}
+                            {!isManagerOrAdmin && isOwner && c.status === 'Disbursed' && (
+                              <button onClick={() => handleConfirmReceipt(c._id)}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
+                                ✓ I've Received This
+                              </button>
+                            )}
+                            {/* Admin can also force-confirm receipt if needed */}
+                            {isAdmin && c.status === 'Disbursed' && (
+                              <button onClick={() => handleConfirmReceipt(c._id)}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
+                                ✓ Confirm Receipt
                               </button>
                             )}
                           </div>
                         </td>
-                      )}
-                      {/* Marketer confirm receipt */}
-                      {!hasRole('manager', 'admin') && (
-                        <td className="px-4 py-3">
-                          {c.status === 'Disbursed' && c.userId?._id === user?._id && (
-                            <button onClick={() => handleConfirm(c._id)}
-                              className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">
-                              Confirm Received
-                            </button>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -207,7 +349,7 @@ export default function CommissionsPage() {
 
       {tab === 'summary' && summary && (
         <div className="space-y-6">
-          {/* By Rep Summary (managers/admin) */}
+          {/* By Rep (managers/admin) */}
           {summary.byRep && summary.byRep.length > 0 && (
             <div className="card">
               <h3 className="text-lg font-semibold mb-4">Commission by Sales Rep</h3>
@@ -216,20 +358,24 @@ export default function CommissionsPage() {
                   <thead>
                     <tr className="bg-gray-50 text-left text-gray-500 uppercase text-xs">
                       <th className="px-4 py-3">Rep</th>
-                      <th className="px-4 py-3">Deals</th>
-                      <th className="px-4 py-3">Total Commission</th>
-                      <th className="px-4 py-3">Pending</th>
-                      <th className="px-4 py-3">Paid</th>
+                      <th className="px-4 py-3 text-right">Deals</th>
+                      <th className="px-4 py-3 text-right">Total</th>
+                      <th className="px-4 py-3 text-right">Pending</th>
+                      <th className="px-4 py-3 text-right">Approved</th>
+                      <th className="px-4 py-3 text-right">Disbursed</th>
+                      <th className="px-4 py-3 text-right">Confirmed Paid</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {summary.byRep.map((rep, i) => (
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{rep.name}</td>
-                        <td className="px-4 py-3">{rep.dealCount}</td>
-                        <td className="px-4 py-3 font-bold">{formatNaira(rep.totalCommission)}</td>
-                        <td className="px-4 py-3 text-yellow-600">{formatNaira(rep.pending)}</td>
-                        <td className="px-4 py-3 text-green-600">{formatNaira(rep.paid)}</td>
+                        <td className="px-4 py-3 text-right">{rep.dealCount}</td>
+                        <td className="px-4 py-3 text-right font-bold">{formatCurrency(rep.totalCommission, 'USD')}</td>
+                        <td className="px-4 py-3 text-right text-yellow-600">{formatCurrency(rep.pending || 0, 'USD')}</td>
+                        <td className="px-4 py-3 text-right text-sky-600">{formatCurrency(rep.approved || 0, 'USD')}</td>
+                        <td className="px-4 py-3 text-right text-orange-600">{formatCurrency(rep.disbursed || 0, 'USD')}</td>
+                        <td className="px-4 py-3 text-right text-green-600">{formatCurrency(rep.paid || 0, 'USD')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -238,7 +384,7 @@ export default function CommissionsPage() {
             </div>
           )}
 
-          {/* Monthly Breakdown */}
+          {/* Monthly */}
           {summary.monthly && summary.monthly.length > 0 && (
             <div className="card">
               <h3 className="text-lg font-semibold mb-4">Monthly Commission</h3>
@@ -246,13 +392,22 @@ export default function CommissionsPage() {
                 {summary.monthly.map((month, i) => (
                   <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
                     <span className="font-medium">{month.month}</span>
-                    <span className="text-lg font-bold text-green-600">{formatNaira(month.amount)}</span>
+                    <span className="text-lg font-bold text-green-600">{formatCurrency(month.amount, 'USD')}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Disburse Modal */}
+      {disburseTarget && (
+        <DisburseModal
+          commission={disburseTarget}
+          onClose={() => setDisburseTarget(null)}
+          onConfirm={handleDisburse}
+        />
       )}
     </div>
   );
