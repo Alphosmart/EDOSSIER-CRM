@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { commissionService } from '../services/commissionService';
+import { getCachedRateMap } from '../services/exchangeRateService';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -26,7 +27,7 @@ function CommissionBadge({ status }) {
 }
 
 // ── Disburse modal ────────────────────────────────────────────────────────────
-function DisburseModal({ commission, onClose, onConfirm }) {
+function DisburseModal({ commission, rateMap, onClose, onConfirm }) {
   const [ref, setRef] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -50,7 +51,8 @@ function DisburseModal({ commission, onClose, onConfirm }) {
           <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-1">
             <p><span className="text-gray-500">School:</span> <span className="font-medium">{commission.leadId?.schoolName}</span></p>
             <p><span className="text-gray-500">Rep:</span> <span className="font-medium">{commission.userId?.firstName} {commission.userId?.lastName}</span></p>
-            <p><span className="text-gray-500">Amount:</span> <span className="font-bold text-green-700">{formatCurrency(commission.commissionAmount, 'USD')}</span></p>
+            <p><span className="text-gray-500">USD:</span> <span className="font-bold text-green-700">{formatCurrency(commission.commissionAmount, 'USD')}</span></p>
+            {rateMap && <p><span className="text-gray-500">NGN:</span> <span className="font-bold text-blue-700">{formatCurrency(commission.commissionAmount * (rateMap['USD'] || 1650), 'NGN')}</span></p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -88,8 +90,21 @@ export default function CommissionsPage() {
   const [filter, setFilter] = useState('all');
   const [tab, setTab] = useState('list');
   const [disburseTarget, setDisburseTarget] = useState(null);
+  const [displayCurrency, setDisplayCurrency] = useState('USD'); // 'USD' | 'NGN'
+  const [rateMap, setRateMap] = useState({ NGN: 1, USD: 1650 });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+    getCachedRateMap().then(setRateMap);
+  }, []);
+
+  // Convert a USD amount to the selected display currency
+  const fmt = (usdAmount) => {
+    if (displayCurrency === 'NGN') {
+      return formatCurrency(usdAmount * (rateMap['USD'] || 1650), 'NGN');
+    }
+    return formatCurrency(usdAmount, 'USD');
+  };
 
   const loadData = async () => {
     try {
@@ -145,11 +160,11 @@ export default function CommissionsPage() {
   if (loading) return <LoadingSpinner size="lg" />;
 
   const summaryCards = summary ? [
-    { label: 'Total Earned',   value: formatCurrency(summary.totalAmount || 0, 'USD'),         icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
-    { label: 'Pending',        value: formatCurrency(summary.pending?.amount || 0, 'USD'),      icon: HiOutlineClock,          color: 'bg-yellow-50 text-yellow-600' },
-    { label: 'Approved',       value: formatCurrency(summary.approved?.amount || 0, 'USD'),     icon: HiOutlineCheckCircle,    color: 'bg-sky-50 text-sky-600' },
-    { label: 'Disbursed',      value: formatCurrency(summary.disbursed?.amount || 0, 'USD'),    icon: HiOutlineBanknotes,      color: 'bg-orange-50 text-orange-600' },
-    { label: 'Confirmed Paid', value: formatCurrency(summary.paid?.amount || 0, 'USD'),         icon: HiOutlineCheck,          color: 'bg-green-50 text-green-600' },
+    { label: 'Total Earned',   value: fmt(summary.totalAmount || 0),         icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
+    { label: 'Pending',        value: fmt(summary.pending?.amount || 0),      icon: HiOutlineClock,          color: 'bg-yellow-50 text-yellow-600' },
+    { label: 'Approved',       value: fmt(summary.approved?.amount || 0),     icon: HiOutlineCheckCircle,    color: 'bg-sky-50 text-sky-600' },
+    { label: 'Disbursed',      value: fmt(summary.disbursed?.amount || 0),    icon: HiOutlineBanknotes,      color: 'bg-orange-50 text-orange-600' },
+    { label: 'Confirmed Paid', value: fmt(summary.paid?.amount || 0),         icon: HiOutlineCheck,          color: 'bg-green-50 text-green-600' },
   ] : [];
 
   // ── Workflow steps banner ────────────────────────────────────────────────────
@@ -169,20 +184,40 @@ export default function CommissionsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="page-title">Commissions</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track approval, disbursement and receipt of commission payments</p>
         </div>
-        <div className="flex bg-gray-100 rounded-lg p-1">
-          <button onClick={() => setTab('list')}
-            className={`px-3 py-1 text-sm rounded-md ${tab === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
-            List
-          </button>
-          <button onClick={() => setTab('summary')}
-            className={`px-3 py-1 text-sm rounded-md ${tab === 'summary' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
-            Summary
-          </button>
+        <div className="flex items-center gap-3">
+          {/* Currency toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            <button
+              onClick={() => setDisplayCurrency('USD')}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
+                displayCurrency === 'USD' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              $ USD
+            </button>
+            <button
+              onClick={() => setDisplayCurrency('NGN')}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
+                displayCurrency === 'NGN' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              ₦ NGN
+            </button>
+          </div>
+          {/* List / Summary tabs */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button onClick={() => setTab('list')}
+              className={`px-3 py-1 text-sm rounded-md ${tab === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+              List
+            </button>
+            <button onClick={() => setTab('summary')}
+              className={`px-3 py-1 text-sm rounded-md ${tab === 'summary' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+              Summary
+            </button>
+          </div>
         </div>
       </div>
 
@@ -271,9 +306,9 @@ export default function CommissionsPage() {
                             {c.userId?.territory && <p className="text-xs text-gray-400">{c.userId.territory}</p>}
                           </td>
                         )}
-                        <td className="px-4 py-3 text-right">{formatCurrency(c.dealAmount, 'USD')}</td>
+                        <td className="px-4 py-3 text-right">{fmt(c.dealAmount)}</td>
                         <td className="px-4 py-3 text-center">{c.commissionPercentage}%</td>
-                        <td className="px-4 py-3 text-right font-bold text-green-600">{formatCurrency(c.commissionAmount, 'USD')}</td>
+                        <td className="px-4 py-3 text-right font-bold text-green-600">{fmt(c.commissionAmount)}</td>
                         <td className="px-4 py-3"><CommissionBadge status={c.status} /></td>
 
                         {/* Audit trail */}
@@ -382,11 +417,11 @@ export default function CommissionsPage() {
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{rep.name}</td>
                         <td className="px-4 py-3 text-right">{rep.dealCount}</td>
-                        <td className="px-4 py-3 text-right font-bold">{formatCurrency(rep.totalCommission, 'USD')}</td>
-                        <td className="px-4 py-3 text-right text-yellow-600">{formatCurrency(rep.pending || 0, 'USD')}</td>
-                        <td className="px-4 py-3 text-right text-sky-600">{formatCurrency(rep.approved || 0, 'USD')}</td>
-                        <td className="px-4 py-3 text-right text-orange-600">{formatCurrency(rep.disbursed || 0, 'USD')}</td>
-                        <td className="px-4 py-3 text-right text-green-600">{formatCurrency(rep.paid || 0, 'USD')}</td>
+                        <td className="px-4 py-3 text-right font-bold">{fmt(rep.totalCommission)}</td>
+                        <td className="px-4 py-3 text-right text-yellow-600">{fmt(rep.pending || 0)}</td>
+                        <td className="px-4 py-3 text-right text-sky-600">{fmt(rep.approved || 0)}</td>
+                        <td className="px-4 py-3 text-right text-orange-600">{fmt(rep.disbursed || 0)}</td>
+                        <td className="px-4 py-3 text-right text-green-600">{fmt(rep.paid || 0)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -403,7 +438,7 @@ export default function CommissionsPage() {
                 {summary.monthly.map((month, i) => (
                   <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
                     <span className="font-medium">{month.month}</span>
-                    <span className="text-lg font-bold text-green-600">{formatCurrency(month.amount, 'USD')}</span>
+                    <span className="text-lg font-bold text-green-600">{fmt(month.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -416,6 +451,7 @@ export default function CommissionsPage() {
       {disburseTarget && (
         <DisburseModal
           commission={disburseTarget}
+          rateMap={rateMap}
           onClose={() => setDisburseTarget(null)}
           onConfirm={handleDisburse}
         />
