@@ -14,15 +14,17 @@ import Papa from 'papaparse';
 import { useAuth } from '../context/AuthContext';
 import {
   HiOutlinePlus, HiOutlineSearch, HiOutlineUpload,
-  HiOutlineX, HiOutlineDocumentText, HiOutlineCheckCircle
+  HiOutlineX, HiOutlineDocumentText, HiOutlineCheckCircle,
+  HiOutlineUser
 } from 'react-icons/hi';
 
 export default function LeadsPage() {
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const canImport = hasRole('admin', 'manager');
 
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
+  const [myLeadsTotal, setMyLeadsTotal] = useState(null); // count of leads this user brought
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -31,6 +33,7 @@ export default function LeadsPage() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [viewMode, setViewMode] = useState('cards');
+  const [leadsView, setLeadsView] = useState('all'); // 'all' | 'mine'
 
   // Import state
   const [showImport, setShowImport] = useState(false);
@@ -41,7 +44,14 @@ export default function LeadsPage() {
 
   useEffect(() => {
     loadLeads();
-  }, [page, statusFilter, territoryFilter, countryFilter]);
+  }, [page, statusFilter, territoryFilter, countryFilter, leadsView]);
+
+  // Fetch the "my leads" count once on mount so the tab badge is always visible
+  useEffect(() => {
+    leadService.getLeads({ limit: 1, myLeads: true })
+      .then(({ data }) => setMyLeadsTotal(data.total))
+      .catch(() => {});
+  }, []);
 
   const loadLeads = async () => {
     setLoading(true);
@@ -51,6 +61,7 @@ export default function LeadsPage() {
       if (statusFilter) params.status = statusFilter;
       if (territoryFilter) params.territory = territoryFilter;
       if (countryFilter) params.country = countryFilter;
+      if (leadsView === 'mine') params.myLeads = true;
 
       const { data } = await leadService.getLeads(params);
       setLeads(data.leads);
@@ -62,6 +73,8 @@ export default function LeadsPage() {
       setLoading(false);
     }
   };
+
+  const switchView = (v) => { setLeadsView(v); setPage(1); setSearch(''); setStatusFilter(''); setTerritoryFilter(''); setCountryFilter(''); };
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -138,6 +151,32 @@ export default function LeadsPage() {
             Add Lead
           </Link>
         </div>
+      </div>
+
+      {/* Leads view toggle: All vs My Leads (brought by me) */}
+      <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+        <button
+          onClick={() => switchView('all')}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+            leadsView === 'all' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          All Leads
+        </button>
+        <button
+          onClick={() => switchView('mine')}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+            leadsView === 'mine' ? 'bg-primary-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <HiOutlineUser className="w-4 h-4" />
+          Leads I Brought
+          {myLeadsTotal !== null && (
+            <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+              leadsView === 'mine' ? 'bg-white text-primary-600' : 'bg-primary-100 text-primary-700'
+            }`}>{myLeadsTotal}</span>
+          )}
+        </button>
       </div>
 
       {/* Import Modal */}
@@ -315,6 +354,7 @@ export default function LeadsPage() {
                 <th className="pb-3 font-semibold text-gray-700 text-right">Deal Value</th>
                 <th className="pb-3 font-semibold text-gray-700 text-right">Probability</th>
                 <th className="pb-3 font-semibold text-gray-700">Assigned To</th>
+                <th className="pb-3 font-semibold text-gray-700">Brought By</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -341,6 +381,19 @@ export default function LeadsPage() {
                   <td className="py-3 text-right">{lead.probabilityOfClosing || 0}%</td>
                   <td className="py-3 text-sm">
                     {lead.assignedTo?.firstName} {lead.assignedTo?.lastName}
+                  </td>
+                  <td className="py-3 text-sm">
+                    {lead.createdBy ? (
+                      <span className={`inline-flex items-center gap-1 ${
+                        lead.createdBy._id === user?._id || lead.createdBy === user?._id
+                          ? 'text-primary-600 font-medium' : 'text-gray-500'
+                      }`}>
+                        {lead.createdBy._id === user?._id || lead.createdBy === user?._id
+                          ? <><HiOutlineUser className="w-3.5 h-3.5" /> You</>
+                          : `${lead.createdBy.firstName} ${lead.createdBy.lastName}`
+                        }
+                      </span>
+                    ) : <span className="text-gray-400">—</span>}
                   </td>
                 </tr>
               ))}

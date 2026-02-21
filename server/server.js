@@ -8,6 +8,7 @@ const path = require('path');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { startReminderJob } = require('./jobs/reminderJob');
+const { startExchangeRateJob } = require('./jobs/exchangeRateJob');
 const { seedDefaultRates } = require('./controllers/exchangeRateController');
 
 // Load env vars
@@ -73,10 +74,43 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
+// ── One-time data migrations ──────────────────────────────────────────────
+const runMigrations = async () => {
+  try {
+    const Lead = require('./models/Lead');
+
+    // Backfill country = 'Nigeria' for all leads that were created before the
+    // country field was added to the schema.
+    const countryResult = await Lead.updateMany(
+      { country: { $in: [null, '', undefined] } },
+      { $set: { country: 'Nigeria' } }
+    );
+    if (countryResult.modifiedCount > 0) {
+      console.log(`Migration: backfilled country='Nigeria' on ${countryResult.modifiedCount} leads`);
+    }
+
+    // Backfill territory from state (address field) if territory is blank.
+    // Nigerian leads created via the form may have state but not territory.
+    const territoryResult = await Lead.updateMany(
+      { territory: { $in: [null, '', undefined] }, state: { $nin: [null, ''] } },
+      [{ $set: { territory: '$state' } }]
+    );
+    if (territoryResult.modifiedCount > 0) {
+      console.log(`Migration: backfilled territory from state on ${territoryResult.modifiedCount} leads`);
+    }
+  } catch (err) {
+    console.error('Migration error (non-fatal):', err.message);
+  }
+};
+
 app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
   // Start scheduled jobs
   startReminderJob();
   // Seed exchange rates defaults if DB is empty
   seedDefaultRates().catch(err => console.error('Exchange rate seed error:', err));
+  // Run data migrations
+  runMigrations();
+  // Start live exchange rate sync job
+  startExchangeRateJob();
 });

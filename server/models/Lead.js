@@ -87,6 +87,7 @@ const LeadSchema = new mongoose.Schema({
   // Territory & Assignment (Nigerian state name)
   territory: { type: String },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },  // who originally brought this lead
   lga: { type: String },
 
   // International fields (Layer 1 + Layer 2)
@@ -136,7 +137,10 @@ const LeadSchema = new mongoose.Schema({
 
 // Indexes for performance
 LeadSchema.index({ assignedTo: 1, currentStatus: 1 });
+LeadSchema.index({ createdBy: 1 });
 LeadSchema.index({ territory: 1 });
+LeadSchema.index({ country: 1 });
+LeadSchema.index({ lga: 1 });
 LeadSchema.index({ nextFollowUpDate: 1 });
 LeadSchema.index({ schoolName: 'text', personMet: 'text', city: 'text', schoolId: 'text' });
 LeadSchema.index({ createdAt: -1 });

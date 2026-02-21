@@ -4,11 +4,15 @@ const Lead = require('../models/Lead');
 // Helper: verify a sales_rep is allowed to access a lead
 const canAccessLead = async (user, leadId) => {
   if (['admin', 'manager'].includes(user.role)) return true;
-  const lead = await Lead.findById(leadId).select('assignedTo territory');
+  const lead = await Lead.findById(leadId).select('assignedTo createdBy territory');
   if (!lead) return false;
-  if (user.role === 'team_lead') return lead.territory === user.territory;
-  // sales_rep — must be the assigned rep
-  return lead.assignedTo && lead.assignedTo.equals(user._id);
+  if (user.role === 'team_lead') {
+    return lead.territory === user.territory ||
+      (lead.createdBy && lead.createdBy.equals(user._id));
+  }
+  // sales_rep — must be assigned rep OR the one who brought the lead
+  return (lead.assignedTo && lead.assignedTo.equals(user._id)) ||
+    (lead.createdBy && lead.createdBy.equals(user._id));
 };
 
 // @desc    Get activities for a lead

@@ -483,6 +483,22 @@ export default function LeadDetailPage() {
                 </span>
               </div>
               <div>
+                <span className="text-gray-500">Brought By:</span>
+                {lead.createdBy ? (
+                  <span className="ml-2 font-medium">
+                    {lead.createdBy._id === user?._id
+                      ? <span className="text-primary-600">You</span>
+                      : `${lead.createdBy.firstName} ${lead.createdBy.lastName}`
+                    }
+                    {lead.createdBy._id === lead.assignedTo?._id && (
+                      <span className="ml-1 text-xs text-gray-400">(same as assigned)</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="ml-2 text-gray-400">—</span>
+                )}
+              </div>
+              <div>
                 <span className="text-gray-500">Territory:</span>
                 <span className="ml-2">{lead.territory}</span>
               </div>

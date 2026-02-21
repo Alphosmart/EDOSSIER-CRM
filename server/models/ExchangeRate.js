@@ -11,9 +11,10 @@ const ExchangeRateSchema = new mongoose.Schema({
   rateToNGN:   { type: Number, required: true, min: 0 },       // 1 unit of this currency = X NGN
   description: { type: String },                                // e.g. 'US Dollar'
   lastUpdated: { type: Date,   default: Date.now },
-  updatedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  updatedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // Tracks whether the last update came from the live API or a manual admin edit
+  source:      { type: String, enum: ['auto', 'manual', 'seed'], default: 'seed' },
+  apiProvider: { type: String, default: null }                  // e.g. 'open.er-api.com'
 });
-
-ExchangeRateSchema.index({ currency: 1 });
 
 module.exports = mongoose.model('ExchangeRate', ExchangeRateSchema);

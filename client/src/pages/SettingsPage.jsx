@@ -4,8 +4,8 @@ import { useSearchParams } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { userService } from '../services/userService';
 import toast from 'react-hot-toast';
-import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil, HiOutlineGlobe, HiOutlineTrash } from 'react-icons/hi';
-import { exchangeRateService } from '../services/exchangeRateService';
+import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil, HiOutlineGlobe, HiOutlineTrash, HiOutlineRefresh, HiOutlineCheckCircle } from 'react-icons/hi';
+import { exchangeRateService, invalidateRateCache } from '../services/exchangeRateService';
 
 export default function SettingsPage() {
   const { user, hasRole } = useAuth();
@@ -29,6 +29,7 @@ export default function SettingsPage() {
   // Exchange rates state
   const [exchangeRates, setExchangeRates] = useState([]);
   const [exRatesLoading, setExRatesLoading] = useState(false);
+  const [syncingRates, setSyncingRates] = useState(false);
   const [editingExRate, setEditingExRate] = useState({}); // { currency: { rate, description } }
   const [savingExRate, setSavingExRate] = useState({});
   const [newRate, setNewRate] = useState({ currency: '', rate: '', description: '' });
@@ -83,14 +84,31 @@ export default function SettingsPage() {
     try {
       await exchangeRateService.upsertRate(currency, rateNum, description);
       setExchangeRates(prev => prev.map(r =>
-        r.currency === currency ? { ...r, rateToNGN: rateNum, description, lastUpdated: new Date() } : r
+        r.currency === currency
+          ? { ...r, rateToNGN: rateNum, description, lastUpdated: new Date().toISOString(), source: 'manual' }
+          : r
       ));
+      invalidateRateCache();
       cancelEditExRate(currency);
       toast.success(`${currency} rate updated`);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update rate');
     } finally {
       setSavingExRate(prev => ({ ...prev, [currency]: false }));
+    }
+  };
+
+  const syncRatesNow = async () => {
+    setSyncingRates(true);
+    try {
+      const { data } = await exchangeRateService.refreshRates();
+      toast.success(`Live sync complete — ${data.updated} rates updated`);
+      invalidateRateCache();
+      await loadExchangeRates(); // reload to show new values + timestamps
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Live sync failed — check your internet connection');
+    } finally {
+      setSyncingRates(false);
     }
   };
 
@@ -439,14 +457,27 @@ export default function SettingsPage() {
       {/* ── Exchange Rates (admin + manager) ── */}
       {tab === 'exchangeRates' && canManageRates && (
         <div className="space-y-4">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
               <h2 className="text-lg font-semibold">Exchange Rates to NGN</h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                All dashboard revenue figures are converted to NGN for aggregation. 1 NGN = 1 NGN.
+                Rates are auto-synced every 6 hours from{' '}
+                <a href="https://open.er-api.com" target="_blank" rel="noreferrer"
+                   className="text-primary-600 hover:underline">open.er-api.com</a>.
+                You can also edit any rate manually — it will be overwritten on the next auto-sync.
               </p>
             </div>
-            <button onClick={loadExchangeRates} className="btn-secondary text-sm">Refresh</button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={syncRatesNow}
+                disabled={syncingRates}
+                className="btn-primary text-sm flex items-center gap-1.5"
+              >
+                <HiOutlineRefresh className={`w-4 h-4 ${syncingRates ? 'animate-spin' : ''}`} />
+                {syncingRates ? 'Syncing…' : 'Sync Now'}
+              </button>
+              <button onClick={loadExchangeRates} className="btn-secondary text-sm">Reload</button>
+            </div>
           </div>
 
           {exRatesLoading ? (
@@ -459,7 +490,8 @@ export default function SettingsPage() {
                     <th className="px-4 py-3 w-24">Currency</th>
                     <th className="px-4 py-3">Description</th>
                     <th className="px-4 py-3 w-44">Rate to NGN (1 unit)</th>
-                    <th className="px-4 py-3 w-36">Last Updated</th>
+                    <th className="px-4 py-3 w-36">Source</th>
+                    <th className="px-4 py-3 w-44">Last Updated</th>
                     <th className="px-4 py-3 w-32">Actions</th>
                   </tr>
                 </thead>
@@ -499,8 +531,25 @@ export default function SettingsPage() {
                             <span className="font-semibold">₦{r.rateToNGN?.toLocaleString()}</span>
                           )}
                         </td>
+                        <td className="px-4 py-3">
+                          {r.source === 'auto' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                              <HiOutlineCheckCircle className="w-3 h-3" /> Live
+                            </span>
+                          ) : r.source === 'manual' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700">
+                              <HiOutlinePencil className="w-3 h-3" /> Manual
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                              Default
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-xs text-gray-400">
-                          {r.lastUpdated ? new Date(r.lastUpdated).toLocaleDateString() : '—'}
+                          {r.lastUpdated
+                            ? new Date(r.lastUpdated).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                            : '—'}
                         </td>
                         <td className="px-4 py-3">
                           {editing ? (

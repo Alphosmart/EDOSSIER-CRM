@@ -69,12 +69,30 @@ exports.upsertRate = async (req, res) => {
         rateToNGN: Number(rateToNGN),
         description: description || undefined,
         lastUpdated: new Date(),
-        updatedBy: req.user._id
+        updatedBy: req.user._id,
+        source: 'manual',       // mark as manually edited so UI can distinguish
+        apiProvider: null
       },
       { upsert: true, new: true }
     );
 
     res.json(rate);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Trigger an immediate live rate sync from open.er-api.com
+// @route   POST /api/exchange-rates/refresh
+// @access  Private (admin/manager)
+exports.refreshRates = async (req, res) => {
+  try {
+    const { fetchAndUpdateRates } = require('../jobs/exchangeRateJob');
+    const result = await fetchAndUpdateRates();
+    if (result.error) {
+      return res.status(502).json({ message: `Rate provider error: ${result.error}` });
+    }
+    res.json({ message: `Synced ${result.updated} rates successfully`, ...result });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

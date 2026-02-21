@@ -3,7 +3,8 @@ import StatusBadge from '../common/StatusBadge';
 import { formatNaira } from '../../utils/formatCurrency';
 import { formatDate, isOverdue } from '../../utils/formatDate';
 import LeadStatusDropdown from './LeadStatusDropdown';
-import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar } from 'react-icons/hi';
+import { useAuth } from '../../context/AuthContext';
+import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar, HiOutlineUser } from 'react-icons/hi';
 
 // Days since status last changed (lead.updatedAt)
 function AgingBadge({ updatedAt }) {
@@ -14,8 +15,12 @@ function AgingBadge({ updatedAt }) {
 }
 
 export default function LeadCard({ lead, onStatusChange }) {
+  const { user } = useAuth();
   const overdue = lead.nextFollowUpDate && isOverdue(lead.nextFollowUpDate) &&
     !['Closed Won', 'Closed Lost', 'Not Interested'].includes(lead.currentStatus);
+
+  const isBroughtByMe = lead.createdBy &&
+    (lead.createdBy._id === user?._id || lead.createdBy === user?._id);
 
   return (
     <div className={`card hover:shadow-md transition-shadow ${overdue ? 'border-l-4 border-l-red-400' : ''}`}>
@@ -86,11 +91,17 @@ export default function LeadCard({ lead, onStatusChange }) {
         )}
       </div>
 
-      {lead.assignedTo && (
-        <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-gray-500">
-          Assigned to: {lead.assignedTo.firstName} {lead.assignedTo.lastName}
-        </div>
-      )}
+      <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+        {lead.assignedTo && (
+          <span>Assigned: {lead.assignedTo.firstName} {lead.assignedTo.lastName}</span>
+        )}
+        {isBroughtByMe && (
+          <span className="flex items-center gap-1 text-primary-600 font-medium">
+            <HiOutlineUser className="w-3.5 h-3.5" />
+            Brought by you
+          </span>
+        )}
+      </div>
     </div>
   );
 }

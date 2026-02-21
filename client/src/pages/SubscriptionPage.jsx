@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { subscriptionService } from '../services/subscriptionService';
-import { formatNaira } from '../utils/formatCurrency';
+import { formatCurrency } from '../utils/formatCurrency';
+import { getCachedRateMap } from '../services/exchangeRateService';
+import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/formatDate';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -17,11 +19,30 @@ import {
 const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
 
 export default function SubscriptionPage() {
+  const { user, hasRole } = useAuth();
+  const isAdminOrManager = hasRole('admin', 'manager');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [rateMap, setRateMap] = useState({ NGN: 1, USD: 1650 });
+
+  // Currency toggle (persisted) — subscription data is stored in NGN
+  const currencyKey = user ? `subscriptionCurrency_${user._id}` : 'subscriptionCurrency';
+  const defaultCurrency = isAdminOrManager ? 'USD' : 'NGN';
+  const [displayCurrency, setDisplayCurrency] = useState(
+    () => localStorage.getItem(currencyKey) || defaultCurrency
+  );
+  const toggleCurrency = (c) => { setDisplayCurrency(c); localStorage.setItem(currencyKey, c); };
+  // API values are in NGN; divide by USD rate to show USD
+  const fmt = (ngnAmt) => displayCurrency === 'NGN'
+    ? formatCurrency(ngnAmt || 0, 'NGN')
+    : formatCurrency((ngnAmt || 0) / (rateMap['USD'] || 1650), 'USD');
+  const yAxisFmt = (v) => displayCurrency === 'NGN'
+    ? (v >= 1_000_000 ? `₦${(v / 1_000_000).toFixed(1)}M` : `₦${(v / 1_000).toFixed(0)}K`)
+    : (v >= 1_000 ? `$${((v / (rateMap['USD'] || 1650)) / 1_000).toFixed(0)}K` : `$${(v / (rateMap['USD'] || 1650)).toFixed(0)}`);
 
   useEffect(() => {
     loadData();
+    getCachedRateMap().then(setRateMap);
   }, []);
 
   const loadData = async () => {
@@ -39,24 +60,43 @@ export default function SubscriptionPage() {
   if (!data) return <div className="text-center py-12 text-gray-500">No data available</div>;
 
   const kpis = [
-    { label: 'Monthly Recurring Revenue', value: formatNaira(data.totalMRR), icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
-    { label: 'Annual Recurring Revenue', value: formatNaira(data.totalARR), icon: HiOutlineTrendingUp, color: 'bg-green-50 text-green-600' },
+    { label: 'Monthly Recurring Revenue', value: fmt(data.totalMRR), icon: HiOutlineCurrencyDollar, color: 'bg-blue-50 text-blue-600' },
+    { label: 'Annual Recurring Revenue', value: fmt(data.totalARR), icon: HiOutlineTrendingUp, color: 'bg-green-50 text-green-600' },
     { label: 'Active Subscriptions', value: data.activeSubscriptions, icon: HiOutlineUserGroup, color: 'bg-purple-50 text-purple-600' },
-    { label: 'Avg Revenue/School', value: formatNaira(data.avgRevenuePerSchool), icon: HiOutlineCurrencyDollar, color: 'bg-indigo-50 text-indigo-600' },
+    { label: 'Avg Revenue/School', value: fmt(data.avgRevenuePerSchool), icon: HiOutlineCurrencyDollar, color: 'bg-indigo-50 text-indigo-600' },
     { label: 'Renewals Due (30d)', value: data.renewalsDue30, icon: HiOutlineCalendar, color: data.renewalsDue30 > 0 ? 'bg-yellow-50 text-yellow-600' : 'bg-gray-50 text-gray-600' },
     { label: 'Overdue Renewals', value: data.overdueRenewals, icon: HiOutlineExclamation, color: data.overdueRenewals > 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-600' },
-    { label: 'Revenue at Risk', value: formatNaira(data.revenueAtRisk), icon: HiOutlineExclamation, color: data.revenueAtRisk > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600' },
-    { label: 'Amount Outstanding', value: formatNaira(data.amountOutstanding), icon: HiOutlineCurrencyDollar, color: data.amountOutstanding > 0 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600' },
+    { label: 'Revenue at Risk', value: fmt(data.revenueAtRisk), icon: HiOutlineExclamation, color: data.revenueAtRisk > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600' },
+    { label: 'Amount Outstanding', value: fmt(data.amountOutstanding), icon: HiOutlineCurrencyDollar, color: data.amountOutstanding > 0 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600' },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Subscription Summary</h1>
-        <button onClick={loadData} className="btn-secondary text-sm flex items-center gap-1">
-          <HiOutlineRefresh className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Currency toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            <button
+              onClick={() => toggleCurrency('USD')}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
+                displayCurrency === 'USD' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              $ USD
+            </button>
+            <button
+              onClick={() => toggleCurrency('NGN')}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
+                displayCurrency === 'NGN' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              ₦ NGN
+            </button>
+          </div>
+          <button onClick={loadData} className="btn-secondary text-sm flex items-center gap-1">
+            <HiOutlineRefresh className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -95,7 +135,7 @@ export default function SubscriptionPage() {
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v) => formatNaira(v)} />
+                <Tooltip formatter={(v) => fmt(v)} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -108,8 +148,8 @@ export default function SubscriptionPage() {
                     <span className="text-gray-500">({item.count} schools)</span>
                   </div>
                   <div className="text-right">
-                    <span className="font-bold">{formatNaira(item.revenue)}</span>
-                    <span className="text-gray-500 ml-2 text-xs">MRR: {formatNaira(item.mrr)}</span>
+                    <span className="font-bold">{fmt(item.revenue)}</span>
+                    <span className="text-gray-500 ml-2 text-xs">MRR: {fmt(item.mrr)}</span>
                   </div>
                 </div>
               ))}
@@ -125,8 +165,8 @@ export default function SubscriptionPage() {
               <BarChart data={data.planBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="plan" />
-                <YAxis tickFormatter={(v) => `₦${(v / 1000000).toFixed(1)}M`} />
-                <Tooltip formatter={(v) => formatNaira(v)} />
+                <YAxis tickFormatter={yAxisFmt} />
+                <Tooltip formatter={(v) => fmt(v)} />
                 <Legend />
                 <Bar dataKey="revenue" fill="#2563eb" name="Revenue" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -136,7 +176,7 @@ export default function SubscriptionPage() {
                 <div key={i} className="bg-gray-50 rounded-lg p-3 text-sm">
                   <p className="font-semibold">{plan.plan}</p>
                   <p className="text-gray-500">{plan.count} schools</p>
-                  <p className="font-bold text-primary-600">{formatNaira(plan.revenue)}</p>
+                  <p className="font-bold text-primary-600">{fmt(plan.revenue)}</p>
                 </div>
               ))}
             </div>
@@ -185,7 +225,7 @@ export default function SubscriptionPage() {
                         {alert.daysUntilRenewal < 0 ? `${Math.abs(alert.daysUntilRenewal)}d overdue` : `${alert.daysUntilRenewal}d`}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-bold">{formatNaira(alert.negotiatedPrice)}</td>
+                    <td className="px-4 py-3 font-bold">{fmt(alert.negotiatedPrice)}</td>
                     <td className="px-4 py-3">{alert.territory}</td>
                   </tr>
                 ))}

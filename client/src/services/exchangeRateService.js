@@ -15,6 +15,12 @@ export const exchangeRateService = {
 
   /** Delete a rate (admin only) */
   deleteRate: (currency) => api.delete(`/exchange-rates/${currency}`),
+
+  /**
+   * Trigger an immediate live sync from open.er-api.com.
+   * Returns { updated, failed }.
+   */
+  refreshRates: () => api.post('/exchange-rates/refresh'),
 };
 
 // ─── Client-side rate cache ─────────────────────────────────────────────────

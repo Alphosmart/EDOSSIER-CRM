@@ -6,7 +6,10 @@ const TERRITORY_COLORS = {
   pipelineValue: '#3B82F6'
 };
 
-export default function TerritoryChart({ data }) {
+export default function TerritoryChart({ data, fmt }) {
+  // fmt is injected from parent; fall back to NGN display if not provided
+  const display = fmt || ((v) => formatNaira(v));
+
   if (!data || data.length === 0) {
     return (
       <div className="card">
@@ -24,8 +27,8 @@ export default function TerritoryChart({ data }) {
           <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="territory" />
-            <YAxis tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
-            <Tooltip formatter={(value) => formatNaira(value)} />
+            <YAxis tickFormatter={(v) => display(v).replace(/[₦$]/, '').split('.')[0]} />
+            <Tooltip formatter={(value) => [display(value), '']} />
             <Legend />
             <Bar dataKey="revenue" fill={TERRITORY_COLORS.revenue} name="Revenue" radius={[4, 4, 0, 0]} />
             <Bar dataKey="pipelineValue" fill={TERRITORY_COLORS.pipelineValue} name="Pipeline" radius={[4, 4, 0, 0]} />

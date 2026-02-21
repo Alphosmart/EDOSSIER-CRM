@@ -14,6 +14,7 @@ import KPICard from '../components/dashboard/KPICard';
 import PipelineChart from '../components/dashboard/PipelineChart';
 import RevenueChart from '../components/dashboard/RevenueChart';
 import TerritoryChart from '../components/dashboard/TerritoryChart';
+import GeographyChart from '../components/dashboard/GeographyChart';
 import OverdueAlerts from '../components/dashboard/OverdueAlerts';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import {
@@ -21,7 +22,7 @@ import {
   HiOutlineChartBar, HiOutlineCheckCircle, HiOutlineExclamation,
   HiOutlineCalendar, HiOutlineLightningBolt, HiOutlineClipboardList,
   HiOutlineOfficeBuilding, HiOutlineCog, HiOutlineArrowRight, HiOutlineUsers,
-  HiOutlineSwitchHorizontal
+  HiOutlineSwitchHorizontal, HiOutlineGlobe, HiOutlineLocationMarker
 } from 'react-icons/hi';
 
 export default function DashboardPage() {
@@ -79,6 +80,71 @@ export default function DashboardPage() {
 
   useEffect(() => { getCachedRateMap().then(setRateMap); }, []);
 
+  // ── Geographic filter state ──────────────────────────────────────────────
+  const [geoCountry, setGeoCountry] = useState('');
+  const [geoState,   setGeoState]   = useState('');
+  const [geoLga,     setGeoLga]     = useState('');
+  const [geoOptions, setGeoOptions] = useState({ countries: [], states: [], lgas: [] });
+
+  // Geographic breakdown panel
+  const [geoBreakdown,        setGeoBreakdown]        = useState([]);
+  const [geoLevel,             setGeoLevel]             = useState('state'); // 'country'|'state'|'lga'
+  const [geoBreakdownLoading,  setGeoBreakdownLoading]  = useState(false);
+  const [showGeoBreakdown,     setShowGeoBreakdown]     = useState(true);
+
+  // Load available countries (and states/LGAs) for the cascading dropdowns
+  useEffect(() => {
+    dashboardService.getGeoOptions()
+      .then(({ data }) => setGeoOptions(prev => ({ ...prev, countries: data.countries, states: data.states })))
+      .catch(() => {});
+  }, []);
+
+  // When country changes: reload states and clear deeper selections
+  useEffect(() => {
+    setGeoState('');
+    setGeoLga('');
+    if (!geoCountry) {
+      dashboardService.getGeoOptions()
+        .then(({ data }) => setGeoOptions(prev => ({ ...prev, states: data.states, lgas: [] })))
+        .catch(() => {});
+      return;
+    }
+    dashboardService.getGeoOptions(geoCountry)
+      .then(({ data }) => setGeoOptions(prev => ({ ...prev, states: data.states, lgas: [] })))
+      .catch(() => {});
+  }, [geoCountry]);
+
+  // When state changes: reload LGAs and clear LGA selection
+  useEffect(() => {
+    setGeoLga('');
+    if (!geoState) { setGeoOptions(prev => ({ ...prev, lgas: [] })); return; }
+    dashboardService.getGeoOptions(geoCountry, geoState)
+      .then(({ data }) => setGeoOptions(prev => ({ ...prev, lgas: data.lgas })))
+      .catch(() => {});
+  }, [geoState]);
+
+  // Load geo breakdown whenever filters or level changes
+  const loadGeoBreakdown = async (opts = {}) => {
+    setGeoBreakdownLoading(true);
+    try {
+      const { data } = await dashboardService.getGeoBreakdown({
+        from: opts.from || dateFrom,
+        to:   opts.to   || dateTo,
+        country: opts.country !== undefined ? opts.country : geoCountry,
+        state:   opts.state   !== undefined ? opts.state   : geoState,
+        lga:     opts.lga     !== undefined ? opts.lga     : geoLga,
+        level:   opts.level   || geoLevel
+      });
+      setGeoBreakdown(data);
+    } catch (e) {}
+    setGeoBreakdownLoading(false);
+  };
+
+  useEffect(() => {
+    if (showGeoBreakdown) loadGeoBreakdown();
+  }, [geoLevel, showGeoBreakdown, geoCountry, geoState, geoLga]);
+  // ── End geographic filter state ──────────────────────────────────────────
+
   // Date range filter
   const getDefaultFrom = () => {
     const d = new Date();
@@ -92,10 +158,13 @@ export default function DashboardPage() {
     loadDashboard();
   }, []);
 
-  const loadDashboard = async (from = dateFrom, to = dateTo) => {
+  const loadDashboard = async (from = dateFrom, to = dateTo, geoOpts = {}) => {
+    const country = geoOpts.country !== undefined ? geoOpts.country : geoCountry;
+    const state   = geoOpts.state   !== undefined ? geoOpts.state   : geoState;
+    const lga     = geoOpts.lga     !== undefined ? geoOpts.lga     : geoLga;
     setLoading(true);
     try {
-      const opts = { from, to };
+      const opts = { from, to, country, state, lga };
       const promises = [
         dashboardService.getKPIs(opts),
         dashboardService.getPipeline(opts),
@@ -124,14 +193,19 @@ export default function DashboardPage() {
     }
   };
 
-  const handleApplyFilter = () => loadDashboard(dateFrom, dateTo);
+  const handleApplyFilter = () => {
+    loadDashboard(dateFrom, dateTo);
+    loadGeoBreakdown({ from: dateFrom, to: dateTo });
+  };
 
   const handleResetFilter = () => {
     const from = getDefaultFrom();
     const to = new Date().toISOString().slice(0, 10);
     setDateFrom(from);
     setDateTo(to);
-    loadDashboard(from, to);
+    setGeoCountry(''); setGeoState(''); setGeoLga('');
+    loadDashboard(from, to, { country: '', state: '', lga: '' });
+    loadGeoBreakdown({ from, to, country: '', state: '', lga: '' });
   };
 
   if (loading) return <LoadingSpinner size="lg" />;
@@ -175,6 +249,52 @@ export default function DashboardPage() {
               <button onClick={() => toggleCurrency('USD')} className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all ${displayCurrency === 'USD' ? 'bg-green-600 text-white shadow' : 'text-gray-500'}`}>$ USD</button>
               <button onClick={() => toggleCurrency('NGN')} className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all ${displayCurrency === 'NGN' ? 'bg-green-600 text-white shadow' : 'text-gray-500'}`}>₦ NGN</button>
             </div>
+          </div>
+
+          {/* Geographic drill-down filters */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <HiOutlineGlobe className="w-4 h-4 text-gray-400 shrink-0" />
+            {/* Country */}
+            <select
+              value={geoCountry}
+              onChange={e => { setGeoCountry(e.target.value); setGeoState(''); setGeoLga(''); }}
+              className="input-field py-1.5 text-sm w-44"
+            >
+              <option value="">All Countries</option>
+              {geoOptions.countries.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {/* State / Territory */}
+            <select
+              value={geoState}
+              onChange={e => { setGeoState(e.target.value); setGeoLga(''); }}
+              className="input-field py-1.5 text-sm w-44"
+              disabled={!geoOptions.states.length}
+            >
+              <option value="">All States</option>
+              {geoOptions.states.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            {/* LGA / City */}
+            {geoOptions.lgas.length > 0 && (
+              <select
+                value={geoLga}
+                onChange={e => setGeoLga(e.target.value)}
+                className="input-field py-1.5 text-sm w-44"
+              >
+                <option value="">All LGAs</option>
+                {geoOptions.lgas.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            )}
+
+            {(geoCountry || geoState || geoLga) && (
+              <button
+                onClick={() => { setGeoCountry(''); setGeoState(''); setGeoLga(''); }}
+                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+              >
+                ✕ Clear geo
+              </button>
+            )}
           </div>
         </div>
 
@@ -251,7 +371,53 @@ export default function DashboardPage() {
         {/* Charts – Revenue & Territory */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <RevenueChart data={revenue} />
-          <TerritoryChart data={territory} />
+          <TerritoryChart data={territory} fmt={fmt} />
+        </div>
+
+        {/* ── Geographic Breakdown ── */}
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <button
+              onClick={() => setShowGeoBreakdown(s => !s)}
+              className="flex items-center gap-2 font-semibold text-gray-800"
+            >
+              <HiOutlineLocationMarker className="w-5 h-5 text-primary-600" />
+              Geographic Breakdown
+              <span className="text-xs text-gray-400">{showGeoBreakdown ? '▲' : '▼'}</span>
+            </button>
+            {showGeoBreakdown && (
+              <div className="flex items-center gap-2">
+                {/* Drill-down level selector */}
+                {[['country','By Country'],['state','By State'],['lga','By LGA/City']].map(([lv, label]) => (
+                  <button
+                    key={lv}
+                    onClick={() => { setGeoLevel(lv); loadGeoBreakdown({ level: lv }); }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                      geoLevel === lv
+                        ? 'bg-primary-600 text-white border-primary-600 shadow'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-primary-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => loadGeoBreakdown()}
+                  className="btn-secondary text-xs py-1.5 px-3"
+                >
+                  Refresh
+                </button>
+              </div>
+            )}
+          </div>
+          {showGeoBreakdown && (
+            <GeographyChart
+              data={geoBreakdown}
+              level={geoLevel}
+              fmt={fmt}
+              loading={geoBreakdownLoading}
+            />
+          )}
         </div>
 
         {/* ──── Compare Periods ──── */}
@@ -305,6 +471,54 @@ export default function DashboardPage() {
             <button onClick={() => toggleCurrency('USD')} className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all ${displayCurrency === 'USD' ? 'bg-green-600 text-white shadow' : 'text-gray-500'}`}>$ USD</button>
             <button onClick={() => toggleCurrency('NGN')} className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all ${displayCurrency === 'NGN' ? 'bg-green-600 text-white shadow' : 'text-gray-500'}`}>₦ NGN</button>
           </div>
+        </div>
+
+        {/* Geographic drill-down filters (sales rep / team lead) */}
+        <div className="flex flex-wrap items-center gap-2 mt-1">
+          <HiOutlineGlobe className="w-4 h-4 text-gray-400 shrink-0" />
+          <select
+            value={geoCountry}
+            onChange={e => { setGeoCountry(e.target.value); setGeoState(''); setGeoLga(''); }}
+            className="input-field py-1.5 text-sm w-40"
+          >
+            <option value="">All Countries</option>
+            {geoOptions.countries.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {user?.role === 'team_lead' ? (
+            /* team_lead territory is locked server-side — show as read-only pill */
+            user?.territory && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 text-primary-700 border border-primary-200 rounded-md text-xs font-medium">
+                <HiOutlineLocationMarker className="w-3.5 h-3.5" />
+                Territory: {user.territory}
+              </span>
+            )
+          ) : (
+            <select
+              value={geoState}
+              onChange={e => { setGeoState(e.target.value); setGeoLga(''); }}
+              className="input-field py-1.5 text-sm w-40"
+              disabled={!geoOptions.states.length}
+            >
+              <option value="">All States</option>
+              {geoOptions.states.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+          {geoOptions.lgas.length > 0 && (
+            <select
+              value={geoLga}
+              onChange={e => setGeoLga(e.target.value)}
+              className="input-field py-1.5 text-sm w-40"
+            >
+              <option value="">All LGAs</option>
+              {geoOptions.lgas.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          )}
+          {(geoCountry || geoState || geoLga) && (
+            <button
+              onClick={() => { setGeoCountry(''); setGeoState(''); setGeoLga(''); }}
+              className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+            >✕ Clear geo</button>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { dashboardService } from '../services/dashboardService';
 import { formatCurrency } from '../utils/formatCurrency';
+import { getCachedRateMap } from '../services/exchangeRateService';
+import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import StatusBadge from '../components/common/StatusBadge';
 import toast from 'react-hot-toast';
@@ -27,10 +29,24 @@ const STAGE_COLORS = {
 };
 
 export default function ForecastPage() {
+  const { user, hasRole } = useAuth();
+  const isAdminOrManager = hasRole('admin', 'manager');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [rateMap, setRateMap] = useState({ NGN: 1, USD: 1650 });
 
-  useEffect(() => { loadData(); }, []);
+  // Currency toggle (persisted)
+  const currencyKey = user ? `forecastCurrency_${user._id}` : 'forecastCurrency';
+  const defaultCurrency = isAdminOrManager ? 'USD' : 'NGN';
+  const [displayCurrency, setDisplayCurrency] = useState(
+    () => localStorage.getItem(currencyKey) || defaultCurrency
+  );
+  const toggleCurrency = (c) => { setDisplayCurrency(c); localStorage.setItem(currencyKey, c); };
+  const fmt = (usdAmt) => displayCurrency === 'NGN'
+    ? formatCurrency((usdAmt || 0) * (rateMap['USD'] || 1650), 'NGN')
+    : formatCurrency(usdAmt || 0, 'USD');
+
+  useEffect(() => { loadData(); getCachedRateMap().then(setRateMap); }, []);
 
   const loadData = async () => {
     try {
@@ -58,28 +74,28 @@ export default function ForecastPage() {
   const kpis = [
     {
       label: 'Weighted Pipeline',
-      value: formatCurrency(weightedPipeline, 'USD'),
+      value: fmt(weightedPipeline),
       sub: `${data.totalActivePipeline || 0} active deals`,
       icon: HiOutlineChartBar,
       color: 'bg-blue-50 text-blue-600'
     },
     {
       label: 'Total Pipeline Value',
-      value: formatCurrency(totalPipelineValue, 'USD'),
+      value: fmt(totalPipelineValue),
       sub: 'Negotiated prices',
       icon: HiOutlineCurrencyDollar,
       color: 'bg-green-50 text-green-600'
     },
     {
       label: 'Expected This Month',
-      value: formatCurrency(expectedThisMonth, 'USD'),
+      value: fmt(expectedThisMonth),
       sub: `${thisMonthCount} deal${thisMonthCount !== 1 ? 's' : ''} closing`,
       icon: HiOutlineCalendar,
       color: 'bg-purple-50 text-purple-600'
     },
     {
       label: 'Expected Next Month',
-      value: formatCurrency(expectedNextMonth, 'USD'),
+      value: fmt(expectedNextMonth),
       sub: `${nextMonthCount} deal${nextMonthCount !== 1 ? 's' : ''} in pipeline`,
       icon: HiOutlineTrendingUp,
       color: 'bg-indigo-50 text-indigo-600'
@@ -96,10 +112,29 @@ export default function ForecastPage() {
           <h1 className="page-title">Revenue Forecast</h1>
           <p className="text-sm text-gray-500 mt-1">Pipeline outlook &amp; weighted deal value</p>
         </div>
-        <button onClick={loadData} className="btn-secondary text-sm flex items-center gap-1">
-          <HiOutlineRefresh className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Currency toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-0.5">
+            <button
+              onClick={() => toggleCurrency('USD')}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
+                displayCurrency === 'USD' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              $ USD
+            </button>
+            <button
+              onClick={() => toggleCurrency('NGN')}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition-all ${
+                displayCurrency === 'NGN' ? 'bg-green-600 text-white shadow' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              ₦ NGN
+            </button>
+          </div>
+          <button onClick={loadData} className="btn-secondary text-sm flex items-center gap-1">
+            <HiOutlineRefresh className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -128,15 +163,16 @@ export default function ForecastPage() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   type="number"
-                  tickFormatter={(v) =>
-                    v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${(v / 1_000).toFixed(0)}K`
+                  tickFormatter={(v) => displayCurrency === 'NGN'
+                    ? (v >= 1_000_000_000 ? `₦${(v / 1_000_000_000).toFixed(1)}B` : v >= 1_000_000 ? `₦${(v / 1_000_000).toFixed(1)}M` : `₦${(v / 1_000).toFixed(0)}K`)
+                    : (v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${(v / 1_000).toFixed(0)}K`)
                   }
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis type="category" dataKey="status" width={115} tick={{ fontSize: 11 }} />
                 <Tooltip
                   formatter={(v, name) => [
-                    formatCurrency(v, 'USD'),
+                    fmt(v),
                     name === 'weightedValue' ? 'Weighted Value' : 'Total Value'
                   ]}
                 />
@@ -180,9 +216,9 @@ export default function ForecastPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right font-bold">{s.count}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(s.totalValue, 'USD')}</td>
+                      <td className="px-4 py-3 text-right">{fmt(s.totalValue)}</td>
                       <td className="px-4 py-3 text-right text-gray-500">{prob}%</td>
-                      <td className="px-4 py-3 text-right font-bold text-primary-600">{formatCurrency(s.weightedValue, 'USD')}</td>
+                      <td className="px-4 py-3 text-right font-bold text-primary-600">{fmt(s.weightedValue)}</td>
                     </tr>
                   );
                 })}
@@ -193,9 +229,9 @@ export default function ForecastPage() {
                   <td className="px-4 py-3 text-right">
                     {(data.byStage || []).reduce((s, r) => s + r.count, 0)}
                   </td>
-                  <td className="px-4 py-3 text-right">{formatCurrency(totalPipelineValue, 'USD')}</td>
+                  <td className="px-4 py-3 text-right">{fmt(totalPipelineValue)}</td>
                   <td className="px-4 py-3 text-right">—</td>
-                  <td className="px-4 py-3 text-right text-primary-600">{formatCurrency(weightedPipeline, 'USD')}</td>
+                  <td className="px-4 py-3 text-right text-primary-600">{fmt(weightedPipeline)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -244,13 +280,13 @@ export default function ForecastPage() {
                         : '—'}
                     </td>
                     <td className="px-4 py-3 text-right font-bold">
-                      {formatCurrency(p.negotiatedPrice || 0, 'USD')}
+                      {fmt(p.negotiatedPrice || 0)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500">
                       {p.probabilityOfClosing || 0}%
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-primary-600">
-                      {formatCurrency(p.weightedValue, 'USD')}
+                      {fmt(p.weightedValue)}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {p.expectedClosingDate
@@ -279,7 +315,7 @@ export default function ForecastPage() {
                 Closed Revenue (period)
               </p>
               <p className="text-2xl font-bold text-green-800">
-                {formatCurrency(data.totalClosedRevenue, 'USD')}
+                {fmt(data.totalClosedRevenue)}
               </p>
             </div>
           </div>

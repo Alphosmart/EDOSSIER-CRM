@@ -7,18 +7,19 @@ const fs = require('fs');
 const path = require('path');
 
 // Helper: filter leads by user role
+// sales_rep: see leads assigned to them OR leads they originally brought
 const filterLeadsByRole = (user) => {
   const base = { isDeleted: { $ne: true } };
   switch (user.role) {
     case 'sales_rep':
-      return { ...base, assignedTo: user._id };
+      return { ...base, $or: [{ assignedTo: user._id }, { createdBy: user._id }] };
     case 'team_lead':
-      return { ...base, territory: user.territory };
+      return { ...base, $or: [{ territory: user.territory }, { createdBy: user._id }] };
     case 'manager':
     case 'admin':
       return base;
     default:
-      return { ...base, assignedTo: user._id };
+      return { ...base, $or: [{ assignedTo: user._id }, { createdBy: user._id }] };
   }
 };
 
@@ -30,18 +31,30 @@ exports.getLeads = async (req, res) => {
     const filter = filterLeadsByRole(req.user);
 
     // Query params for filtering
-    const { status, territory, search, country, page = 1, limit = 50 } = req.query;
+    const { status, territory, search, country, myLeads, page = 1, limit = 50 } = req.query;
 
     if (status) filter.currentStatus = status;
     if (territory) filter.territory = territory;
     if (country) filter.country = country;
+    // myLeads=true → only leads this user personally created (brought)
+    if (myLeads === 'true') {
+      filter.$or = [{ createdBy: req.user._id }];
+      delete filter.assignedTo; // clear the role-based assignedTo filter
+    }
     if (search) {
-      filter.$or = [
+      const searchCond = [
         { schoolName: { $regex: search, $options: 'i' } },
         { schoolId: { $regex: search, $options: 'i' } },
         { personMet: { $regex: search, $options: 'i' } },
         { city: { $regex: search, $options: 'i' } }
       ];
+      // Merge with existing $or if present (e.g. from myLeads or sales_rep filter)
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchCond }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchCond;
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -49,6 +62,7 @@ exports.getLeads = async (req, res) => {
     const [leads, total] = await Promise.all([
       Lead.find(filter)
         .populate('assignedTo', 'firstName lastName email territory')
+        .populate('createdBy', 'firstName lastName')
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -72,17 +86,20 @@ exports.getLeads = async (req, res) => {
 exports.getLeadById = async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.id)
-      .populate('assignedTo', 'firstName lastName email territory');
+      .populate('assignedTo', 'firstName lastName email territory')
+      .populate('createdBy', 'firstName lastName email');
 
     if (!lead) {
       return res.status(404).json({ message: 'Lead not found' });
     }
 
-    // Check access
-    if (req.user.role === 'sales_rep' && !lead.assignedTo._id.equals(req.user._id)) {
+    // Check access: allow if assigned, created by, within territory, or admin/manager
+    const isAssigned  = lead.assignedTo?._id.equals(req.user._id);
+    const isCreator   = lead.createdBy?._id?.equals(req.user._id);
+    if (req.user.role === 'sales_rep' && !isAssigned && !isCreator) {
       return res.status(403).json({ message: 'Not authorized to view this lead' });
     }
-    if (req.user.role === 'team_lead' && lead.territory !== req.user.territory) {
+    if (req.user.role === 'team_lead' && lead.territory !== req.user.territory && !isCreator) {
       return res.status(403).json({ message: 'Not authorized to view this lead' });
     }
 
@@ -98,6 +115,9 @@ exports.getLeadById = async (req, res) => {
 exports.createLead = async (req, res) => {
   try {
     const leadData = { ...req.body };
+
+    // Always record who brought this lead
+    leadData.createdBy = req.user._id;
 
     // Sales reps always own the leads they create — ignore any submitted assignedTo
     if (!['admin', 'manager'].includes(req.user.role)) {
@@ -168,7 +188,8 @@ exports.createLead = async (req, res) => {
     });
 
     const populatedLead = await Lead.findById(lead._id)
-      .populate('assignedTo', 'firstName lastName email territory');
+      .populate('assignedTo', 'firstName lastName email territory')
+      .populate('createdBy', 'firstName lastName email');
 
     res.status(201).json(populatedLead);
   } catch (error) {
@@ -187,11 +208,13 @@ exports.updateLead = async (req, res) => {
       return res.status(404).json({ message: 'Lead not found' });
     }
 
-    // Check authorization
-    if (req.user.role === 'sales_rep' && !lead.assignedTo.equals(req.user._id)) {
+    // Check authorization: assigned rep, original creator, team_lead in territory, or admin/manager
+    const isAssigned  = lead.assignedTo?.equals(req.user._id);
+    const isCreator   = lead.createdBy?.equals(req.user._id);
+    if (req.user.role === 'sales_rep' && !isAssigned && !isCreator) {
       return res.status(403).json({ message: 'Not authorized to edit this lead' });
     }
-    if (req.user.role === 'team_lead' && lead.territory !== req.user.territory) {
+    if (req.user.role === 'team_lead' && lead.territory !== req.user.territory && !isCreator) {
       return res.status(403).json({ message: 'Not authorized to edit this lead' });
     }
 
@@ -244,7 +267,8 @@ exports.updateLead = async (req, res) => {
     }
 
     const updatedLead = await Lead.findById(lead._id)
-      .populate('assignedTo', 'firstName lastName email territory');
+      .populate('assignedTo', 'firstName lastName email territory')
+      .populate('createdBy', 'firstName lastName email');
 
     res.json(updatedLead);
   } catch (error) {
@@ -402,6 +426,7 @@ exports.importLeads = async (req, res) => {
           proposedPrice: parseFloat(row.proposedPrice) || 0,
           responseSummary: row.responseSummary,
           assignedTo: req.user._id,
+          createdBy: req.user._id,
           commissionPercentage: parseFloat(row.commissionPercentage) || req.user.defaultCommissionRate || 25
         };
 
@@ -443,11 +468,12 @@ exports.addAttachment = async (req, res) => {
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ message: 'Lead not found' });
 
-    // Sales reps can only attach files to their own leads
-    if (req.user.role === 'sales_rep' && !lead.assignedTo.equals(req.user._id)) {
-      return res.status(403).json({ message: 'Not authorized to modify this lead' });
-    }
-    if (req.user.role === 'team_lead' && lead.territory !== req.user.territory) {
+    // Sales reps can attach files if they are assigned or brought the lead
+    const canEdit = ['admin', 'manager'].includes(req.user.role)
+      || lead.assignedTo?.equals(req.user._id)
+      || lead.createdBy?.equals(req.user._id)
+      || (req.user.role === 'team_lead' && lead.territory === req.user.territory);
+    if (!canEdit) {
       return res.status(403).json({ message: 'Not authorized to modify this lead' });
     }
 

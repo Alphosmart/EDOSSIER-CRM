@@ -1,5 +1,6 @@
 const Lead = require('../models/Lead');
 const { getRateMap } = require('./exchangeRateController');
+const { nigerianStatesLgas, stateNames: NIGERIAN_STATE_NAMES, getLgasByState } = require('../data/nigerianStatesLgas');
 
 /**
  * Convert any currency amount to NGN equivalent using the stored rate map.
@@ -19,19 +20,36 @@ const toUSD = (amount, currency, rateMap) => {
   return rateMap ? ngn / (rateMap['USD'] || 1650) : ngn;
 };
 
-// Helper: filter by role
-const filterByRole = (user, fromDate, toDate) => {
+// Helper: build geo filter object from request query
+const geoFilterFrom = ({ country, state, lga } = {}) => ({
+  country: country || null,
+  state: state || null,
+  lga: lga || null
+});
+
+// Helper: filter by role + optional geographic drill-down
+const filterByRole = (user, fromDate, toDate, geoFilter = {}) => {
   const filter = { isDeleted: { $ne: true } };
+
   switch (user.role) {
     case 'sales_rep':
-      filter.assignedTo = user._id;
+      // Sales rep: leads they are assigned to OR leads they personally created
+      filter.$or = [
+        { assignedTo: user._id },
+        { createdBy: user._id }
+      ];
       break;
     case 'team_lead':
-      filter.territory = user.territory;
+      // Team lead: leads in their territory OR leads they personally created
+      filter.$or = [
+        { territory: user.territory },
+        { createdBy: user._id }
+      ];
       break;
     default:
       break;
   }
+
   if (fromDate || toDate) {
     filter.createdAt = {};
     if (fromDate) filter.createdAt.$gte = new Date(fromDate);
@@ -41,6 +59,40 @@ const filterByRole = (user, fromDate, toDate) => {
       filter.createdAt.$lte = to;
     }
   }
+
+  // ── Geographic drill-down ────────────────────────────────────────────────
+  // Country can go directly on the filter (simple equality)
+  if (geoFilter.country) filter.country = geoFilter.country;
+
+  // Collect $or-style geo clauses that need to be ANDed together.
+  // We must not simply merge them into one $or because that would produce wrong
+  // cross-field matches (e.g. a lead in Lagos with an unrelated LGA).
+  const geoClauses = [];
+
+  // State: leads store state in EITHER `territory` (assignment) OR `state` (address)
+  if (geoFilter.state && user.role !== 'team_lead') {
+    geoClauses.push({ $or: [{ territory: geoFilter.state }, { state: geoFilter.state }] });
+  }
+
+  // LGA: leads may have `lga` populated or fall back to `city`
+  if (geoFilter.lga) {
+    geoClauses.push({ $or: [{ lga: geoFilter.lga }, { city: geoFilter.lga }] });
+  }
+
+  // Combine any existing role-based $or with geo clauses using $and
+  if (geoClauses.length > 0 || filter.$or) {
+    const andArr = [];
+    if (filter.$or) { andArr.push({ $or: filter.$or }); delete filter.$or; }
+    andArr.push(...geoClauses);
+    if (andArr.length === 1) {
+      // Only one clause — unwrap back to $or for cleaner mongo query
+      filter.$or = andArr[0].$or;
+    } else {
+      filter.$and = andArr;
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   return filter;
 };
 
@@ -50,7 +102,7 @@ const filterByRole = (user, fromDate, toDate) => {
 exports.getKPIs = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const filter = filterByRole(req.user, from, to);
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const [leads, rateMap] = await Promise.all([Lead.find(filter), getRateMap()]);
 
     const activeStatuses = [
@@ -118,7 +170,7 @@ exports.getKPIs = async (req, res) => {
 exports.getPipeline = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const filter = filterByRole(req.user, from, to);
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const leads = await Lead.find(filter);
 
     const statuses = [
@@ -147,7 +199,7 @@ exports.getPipeline = async (req, res) => {
 exports.getRevenue = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const filter = filterByRole(req.user, from, to);
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const [leads, rateMap] = await Promise.all([Lead.find(filter), getRateMap()]);
 
     const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
@@ -199,7 +251,7 @@ exports.getRevenue = async (req, res) => {
 exports.getMonthly = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const filter = filterByRole(req.user, from, to);
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const leads = await Lead.find(filter).populate('assignedTo', 'firstName lastName');
 
     const now = new Date();
@@ -233,7 +285,7 @@ exports.getMonthly = async (req, res) => {
 exports.getTerritory = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const filter = filterByRole(req.user, from, to);
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const leads = await Lead.find(filter);
 
     // Derive distinct states dynamically from actual lead data
@@ -269,7 +321,7 @@ exports.getTerritory = async (req, res) => {
 exports.getForecast = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const filter = filterByRole(req.user, from, to);
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const [leads, rateMap] = await Promise.all([
       Lead.find(filter).populate('assignedTo', 'firstName lastName territory'),
       getRateMap()
@@ -364,7 +416,7 @@ exports.getForecast = async (req, res) => {
 exports.getMonthlyPerformance = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const filter = filterByRole(req.user, from, to);
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const leads = await Lead.find(filter);
 
     const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
@@ -483,6 +535,146 @@ exports.compareStats = async (req, res) => {
     });
 
     res.json({ periodA, periodB, changes, labels: { A: `${periodA_from} – ${periodA_to}`, B: `${periodB_from} – ${periodB_to}` } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @desc  Geographic breakdown – group KPIs by country / state / LGA
+// @route GET /api/dashboard/geo-breakdown
+// @query level ('country'|'state'|'lga'), from, to, country, state, lga
+// @access Private
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getGeoBreakdown = async (req, res) => {
+  try {
+    const { from, to, level = 'country' } = req.query;
+    const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
+    const [leads, rateMap] = await Promise.all([Lead.find(filter), getRateMap()]);
+
+    // Choose the grouping field based on requested level
+    const groupKey = (lead) => {
+      if (level === 'lga')   return lead.lga || lead.city || 'Unknown';
+      if (level === 'state') return lead.territory || lead.state || 'Unknown';
+      return lead.country || 'Nigeria';              // default: country level
+    };
+
+    const activeStatuses = [
+      'Interested', 'Needs Proposal', 'Needs Approval',
+      'Demo Scheduled', 'Proposal Sent', 'Negotiation'
+    ];
+
+    const groups = {};
+    for (const lead of leads) {
+      const key = groupKey(lead);
+      if (!groups[key]) {
+        groups[key] = {
+          name: key,
+          totalLeads: 0,
+          activeLeads: 0,
+          closedWon: 0,
+          closedLost: 0,
+          revenue: 0,
+          pipelineValue: 0,
+          weightedForecast: 0
+        };
+      }
+      const g = groups[key];
+      g.totalLeads++;
+
+      if (lead.currentStatus === 'Closed Won') {
+        g.closedWon++;
+        g.revenue += toUSD(lead.negotiatedPrice || 0, lead.currency, rateMap);
+      } else if (lead.currentStatus === 'Closed Lost') {
+        g.closedLost++;
+      } else if (activeStatuses.includes(lead.currentStatus)) {
+        g.activeLeads++;
+        const val = toUSD(lead.negotiatedPrice || 0, lead.currency, rateMap);
+        g.pipelineValue   += val;
+        g.weightedForecast += val * ((lead.probabilityOfClosing || 0) / 100);
+      }
+    }
+
+    const result = Object.values(groups)
+      .map(g => ({
+        ...g,
+        revenue:          Math.round(g.revenue * 100) / 100,
+        pipelineValue:    Math.round(g.pipelineValue * 100) / 100,
+        weightedForecast: Math.round(g.weightedForecast * 100) / 100,
+        winRate: (g.closedWon + g.closedLost) > 0
+          ? Math.round((g.closedWon / (g.closedWon + g.closedLost)) * 100)
+          : 0
+      }))
+      .sort((a, b) => b.totalLeads - a.totalLeads);
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @desc  Return distinct geographic values for cascading dropdown population
+// @route GET /api/dashboard/geo-options
+// @query country (optional, to get states), state (optional, to get LGAs)
+// @access Private
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getGeoOptions = async (req, res) => {
+  try {
+    const { country, state } = req.query;
+    const baseFilter = filterByRole(req.user, null, null);
+    const isNigeria = !country || country === 'Nigeria';
+
+    // ── Countries ──────────────────────────────────────────────────────────
+    // Always fetch distinct countries from DB (leads can exist in any country)
+    const dbCountries = await Lead.distinct('country', baseFilter);
+    const cleanCountries = dbCountries.filter(Boolean);
+    // Ensure Nigeria is included if any leads lack a country value
+    const hasLegacy = await Lead.countDocuments({ ...baseFilter, country: { $in: [null, ''] } });
+    if (hasLegacy > 0 && !cleanCountries.includes('Nigeria')) cleanCountries.push('Nigeria');
+    cleanCountries.sort();
+
+    // ── States ─────────────────────────────────────────────────────────────
+    let combinedStates;
+    if (isNigeria) {
+      // For Nigeria: always serve the full 36 states + FCT static list so the
+      // dropdown is useful even for states that don't yet have leads.
+      combinedStates = [...NIGERIAN_STATE_NAMES];
+    } else {
+      // For other countries: return only states that have actual leads
+      const countryFilter = country ? { ...baseFilter, country } : baseFilter;
+      const [territories, addressStates] = await Promise.all([
+        Lead.distinct('territory', countryFilter),
+        Lead.distinct('state',     countryFilter)
+      ]);
+      combinedStates = [...new Set([...territories, ...addressStates])].filter(Boolean).sort();
+    }
+
+    // ── LGAs ───────────────────────────────────────────────────────────────
+    let combinedLgas = [];
+    if (state) {
+      if (isNigeria && getLgasByState(state).length > 0) {
+        // For Nigerian states: use the full static LGA list
+        combinedLgas = getLgasByState(state);
+      } else {
+        // For other countries / unknown states: derive from DB entries
+        const buildStateFilter = () => {
+          const stateMatch = { $or: [{ territory: state }, { state: state }] };
+          const geo = country ? { country } : {};
+          const { $or: roleOr, ...rest } = baseFilter;
+          if (roleOr) return { ...rest, ...geo, $and: [{ $or: roleOr }, stateMatch] };
+          return { ...rest, ...geo, ...stateMatch };
+        };
+        const sf = buildStateFilter();
+        const [lgas, cities] = await Promise.all([
+          Lead.distinct('lga',  sf),
+          Lead.distinct('city', sf)
+        ]);
+        combinedLgas = [...new Set([...lgas, ...cities])].filter(Boolean).sort();
+      }
+    }
+
+    res.json({ countries: cleanCountries, states: combinedStates, lgas: combinedLgas });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
