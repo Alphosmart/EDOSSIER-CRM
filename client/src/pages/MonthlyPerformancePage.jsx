@@ -61,7 +61,7 @@ function TrendBadge({ pct, inverse = false }) {
   );
 }
 
-function KPICard({ icon: Icon, iconBg, label, value, delta, deltaLabel, inverse }) {
+function StatCard({ icon: Icon, iconBg, label, value, delta, deltaLabel, inverse }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
@@ -378,7 +378,7 @@ export default function MonthlyPerformancePage() {
           <>
             {/* ── 5 KPI Cards ─────────────────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {kpiCards.map((card, i) => <KPICard key={i} {...card} />)}
+              {kpiCards.map((card, i) => <StatCard key={i} {...card} />)}
             </div>
 
             {/* ── Quick Stats Row ──────────────────────────────────────── */}

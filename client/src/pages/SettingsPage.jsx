@@ -6,6 +6,7 @@ import { userService } from '../services/userService';
 import toast from 'react-hot-toast';
 import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil, HiOutlineGlobe, HiOutlineTrash, HiOutlineRefresh, HiOutlineCheckCircle } from 'react-icons/hi';
 import { exchangeRateService, invalidateRateCache } from '../services/exchangeRateService';
+import { ROLE_LABELS } from '../utils/constants';
 
 export default function SettingsPage() {
   const { user, hasRole } = useAuth();
@@ -199,7 +200,7 @@ export default function SettingsPage() {
     }
     setLoading(true);
     try {
-      await authService.changePassword(passwords.currentPassword, passwords.newPassword);
+      await authService.changePassword({ currentPassword: passwords.currentPassword, newPassword: passwords.newPassword });
       toast.success('Password changed successfully');
       setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
@@ -209,12 +210,7 @@ export default function SettingsPage() {
     }
   };
 
-  const ROLE_LABELS = {
-    admin: 'Admin',
-    manager: 'Manager',
-    team_lead: 'Team Lead',
-    sales_rep: 'Sales Rep',
-  };
+  // ROLE_LABELS imported from constants.js
 
   return (
     <div className="space-y-6">

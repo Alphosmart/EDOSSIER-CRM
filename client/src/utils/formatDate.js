@@ -1,4 +1,4 @@
-import { format, formatDistanceToNow, isAfter, isBefore, isToday, parseISO } from 'date-fns';
+import { format, formatDistanceToNow, isBefore, isToday, parseISO } from 'date-fns';
 
 export function formatDate(date) {
   if (!date) return '—';

@@ -5,23 +5,7 @@ const AuditLog = require('../models/AuditLog');
 const csv = require('csv-parse/sync');
 const fs = require('fs');
 const path = require('path');
-
-// Helper: filter leads by user role
-// sales_rep: see leads assigned to them OR leads they originally brought
-const filterLeadsByRole = (user) => {
-  const base = { isDeleted: { $ne: true } };
-  switch (user.role) {
-    case 'sales_rep':
-      return { ...base, $or: [{ assignedTo: user._id }, { createdBy: user._id }] };
-    case 'team_lead':
-      return { ...base, $or: [{ territory: user.territory }, { createdBy: user._id }] };
-    case 'manager':
-    case 'admin':
-      return base;
-    default:
-      return { ...base, $or: [{ assignedTo: user._id }, { createdBy: user._id }] };
-  }
-};
+const { filterLeadsByRole } = require('../utils/queryHelpers');
 
 // @desc    Get all leads (filtered by role)
 // @route   GET /api/leads

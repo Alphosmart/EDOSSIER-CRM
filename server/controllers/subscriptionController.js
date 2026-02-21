@@ -1,16 +1,5 @@
 const Lead = require('../models/Lead');
-
-// Helper: filter by role
-const filterByRole = (user) => {
-  switch (user.role) {
-    case 'sales_rep':
-      return { assignedTo: user._id };
-    case 'team_lead':
-      return { territory: user.territory };
-    default:
-      return {};
-  }
-};
+const { filterLeadsByRole } = require('../utils/queryHelpers');
 
 // Helper: calculate MRR from a lead
 const calculateMRR = (lead) => {
@@ -31,7 +20,7 @@ const calculateMRR = (lead) => {
 // @access  Private
 exports.getSubscriptionSummary = async (req, res) => {
   try {
-    const filter = { ...filterByRole(req.user), currentStatus: 'Closed Won' };
+    const filter = { ...filterLeadsByRole(req.user), currentStatus: 'Closed Won' };
     const leads = await Lead.find(filter).populate('assignedTo', 'firstName lastName territory');
 
     const subscribedLeads = leads.filter(l => l.subscriptionType);

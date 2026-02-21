@@ -1,6 +1,7 @@
 const Lead = require('../models/Lead');
 const { getRateMap } = require('./exchangeRateController');
 const { nigerianStatesLgas, stateNames: NIGERIAN_STATE_NAMES, getLgasByState } = require('../data/nigerianStatesLgas');
+const { ACTIVE_STATUSES: activeStatuses } = require('../utils/queryHelpers');
 
 /**
  * Convert any currency amount to NGN equivalent using the stored rate map.
@@ -105,10 +106,6 @@ exports.getKPIs = async (req, res) => {
     const filter = filterByRole(req.user, from, to, geoFilterFrom(req.query));
     const [leads, rateMap] = await Promise.all([Lead.find(filter), getRateMap()]);
 
-    const activeStatuses = [
-      'Interested', 'Needs Proposal', 'Needs Approval',
-      'Demo Scheduled', 'Proposal Sent', 'Negotiation'
-    ];
 
     const activeLeads = leads.filter(l => activeStatuses.includes(l.currentStatus));
     const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
@@ -225,10 +222,6 @@ exports.getRevenue = async (req, res) => {
     }
 
     // Forecast based on active pipeline
-    const activeStatuses = [
-      'Interested', 'Needs Proposal', 'Needs Approval',
-      'Demo Scheduled', 'Proposal Sent', 'Negotiation'
-    ];
     const activeLeads = leads.filter(l => activeStatuses.includes(l.currentStatus));
     const forecast = activeLeads.reduce((sum, l) => {
       return sum + (toUSD(l.negotiatedPrice || 0, l.currency, rateMap) * ((l.probabilityOfClosing || 0) / 100));
@@ -327,10 +320,6 @@ exports.getForecast = async (req, res) => {
       getRateMap()
     ]);
 
-    const activeStatuses = [
-      'Interested', 'Needs Proposal', 'Needs Approval',
-      'Demo Scheduled', 'Proposal Sent', 'Negotiation'
-    ];
     const activeLeads = leads.filter(l => activeStatuses.includes(l.currentStatus));
     const closedWon = leads.filter(l => l.currentStatus === 'Closed Won');
 
@@ -481,10 +470,6 @@ const buildPeriodStats = async (user, from, to, rateMap) => {
   const filter = filterByRole(user, from, to);
   const leads = await Lead.find(filter);
 
-  const activeStatuses = [
-    'Interested', 'Needs Proposal', 'Needs Approval',
-    'Demo Scheduled', 'Proposal Sent', 'Negotiation'
-  ];
 
   const closedWon  = leads.filter(l => l.currentStatus === 'Closed Won');
   const closedLost = leads.filter(l => l.currentStatus === 'Closed Lost');
@@ -559,10 +544,6 @@ exports.getGeoBreakdown = async (req, res) => {
       return lead.country || 'Nigeria';              // default: country level
     };
 
-    const activeStatuses = [
-      'Interested', 'Needs Proposal', 'Needs Approval',
-      'Demo Scheduled', 'Proposal Sent', 'Negotiation'
-    ];
 
     const groups = {};
     for (const lead of leads) {

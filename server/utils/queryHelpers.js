@@ -1,6 +1,12 @@
 /**
- * Shared query helpers used across controllers
+ * Shared constants and query helpers used across controllers
  */
+
+// Lead statuses that represent active pipeline (in-progress, not yet closed)
+const ACTIVE_STATUSES = [
+  'Interested', 'Needs Proposal', 'Needs Approval',
+  'Demo Scheduled', 'Proposal Sent', 'Negotiation'
+];
 
 // Filter leads by user role (exported for use in search & report controllers too)
 // sales_rep / team_lead: see leads they are assigned to OR leads they originally brought
@@ -19,4 +25,4 @@ const filterLeadsByRole = (user) => {
   }
 };
 
-module.exports = { filterLeadsByRole };
+module.exports = { filterLeadsByRole, ACTIVE_STATUSES };

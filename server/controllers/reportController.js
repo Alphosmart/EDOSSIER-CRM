@@ -1,24 +1,13 @@
 const Lead = require('../models/Lead');
 const CommissionPayout = require('../models/CommissionPayout');
-
-// Helper: filter by role
-const filterByRole = (user) => {
-  switch (user.role) {
-    case 'sales_rep':
-      return { assignedTo: user._id };
-    case 'team_lead':
-      return { territory: user.territory };
-    default:
-      return {};
-  }
-};
+const { filterLeadsByRole } = require('../utils/queryHelpers');
 
 // @desc    Sales report (date range)
 // @route   GET /api/reports/sales
 // @access  Private
 exports.getSalesReport = async (req, res) => {
   try {
-    const filter = filterByRole(req.user);
+    const filter = filterLeadsByRole(req.user);
     const { startDate, endDate } = req.query;
 
     if (startDate && endDate) {
@@ -82,7 +71,7 @@ exports.getCommissionReport = async (req, res) => {
 // @access  Private
 exports.getTerritoryReport = async (req, res) => {
   try {
-    const filter = filterByRole(req.user);
+    const filter = filterLeadsByRole(req.user);
     const leads = await Lead.find(filter)
       .populate('assignedTo', 'firstName lastName territory');
 
@@ -118,7 +107,7 @@ exports.getTerritoryReport = async (req, res) => {
 // @access  Private
 exports.exportData = async (req, res) => {
   try {
-    const filter = filterByRole(req.user);
+    const filter = filterLeadsByRole(req.user);
     const { type = 'leads' } = req.query;
 
     let data;

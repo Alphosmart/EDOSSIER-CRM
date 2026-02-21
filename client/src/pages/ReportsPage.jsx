@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { reportService } from '../services/userService';
+import { reportService } from '../services/reportService';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { formatCurrency } from '../utils/formatCurrency';
