@@ -26,6 +26,7 @@ export default function LeadsPage() {
   const [total, setTotal] = useState(0);
   const [myLeadsTotal, setMyLeadsTotal] = useState(null); // count of leads this user brought
   const [loading, setLoading] = useState(true);
+  const [remindingOverdue, setRemindingOverdue] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [territoryFilter, setTerritoryFilter] = useState('');
