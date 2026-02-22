@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_LABELS } from '../../utils/constants';
 import { timeAgo } from '../../utils/formatDate';
-import { HiOutlineMenu, HiOutlineLogout, HiOutlineUser, HiOutlineBell } from 'react-icons/hi';
+import { HiOutlineMenu, HiOutlineLogout, HiOutlineUser, HiOutlineBell, HiOutlineCalendar } from 'react-icons/hi';
 import { useState, useEffect, useRef } from 'react';
 import { notificationService } from '../../services/notificationService';
 import GlobalSearch from './GlobalSearch';
@@ -78,23 +78,30 @@ function NotificationPanel() {
           <div className="max-h-80 overflow-y-auto divide-y">
             {notifications.length === 0 ? (
               <p className="text-center text-gray-400 text-sm py-8">No notifications yet</p>
-            ) : notifications.map(n => (
-              <button
-                key={n._id}
-                onClick={() => handleClick(n)}
-                className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${!n.read ? 'bg-blue-50/50' : ''}`}
-              >
-                <div className="flex items-start gap-2">
-                  {!n.read && <span className="w-2 h-2 mt-1.5 bg-blue-500 rounded-full shrink-0" />}
-                  {n.read && <span className="w-2 h-2 mt-1.5 shrink-0" />}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{n.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.message}</p>
-                    <p className="text-xs text-gray-400 mt-1">{timeAgo(n.createdAt)}</p>
-                  </div>
-                </div>
-              </button>
-            ))}
+            ) : notifications.map(n => {
+                const isFollowUp = n.type === 'follow_up';
+                const dotColor = !n.read ? (isFollowUp ? 'bg-amber-500' : 'bg-blue-500') : '';
+                const rowBg = !n.read ? (isFollowUp ? 'bg-amber-50/60' : 'bg-blue-50/50') : '';
+                return (
+                  <button
+                    key={n._id}
+                    onClick={() => handleClick(n)}
+                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${rowBg}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {isFollowUp
+                        ? <HiOutlineCalendar className={`w-4 h-4 mt-0.5 shrink-0 ${!n.read ? 'text-amber-500' : 'text-gray-300'}`} />
+                        : <span className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${dotColor}`} />}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{n.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{n.message}</p>
+                        <p className="text-xs text-gray-400 mt-1">{timeAgo(n.createdAt)}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            }
           </div>
         </div>
       )}

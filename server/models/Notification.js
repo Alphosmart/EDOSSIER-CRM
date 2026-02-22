@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const NotificationSchema = new mongoose.Schema({
   userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  type:     { type: String, enum: ['commission', 'lead', 'system'], default: 'system' },
+  type:     { type: String, enum: ['commission', 'lead', 'system', 'follow_up'], default: 'system' },
   title:    { type: String, required: true },
   message:  { type: String, required: true },
   link:     { type: String },          // client-side route to navigate to

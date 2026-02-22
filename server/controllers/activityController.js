@@ -1,5 +1,6 @@
 const Activity = require('../models/Activity');
 const Lead = require('../models/Lead');
+const { createNotification } = require('./notificationController');
 
 // Helper: verify a sales_rep is allowed to access a lead
 const canAccessLead = async (user, leadId) => {
@@ -58,11 +59,21 @@ exports.createActivity = async (req, res) => {
     const populated = await Activity.findById(activity._id)
       .populate('userId', 'firstName lastName');
 
-    // Auto-sync lead's next follow-up date whenever a follow-up is scheduled
+    // Auto-sync lead's next follow-up date + notify the assigned rep
     if (activityData.followUpDate && leadId) {
       const update = { nextFollowUpDate: activityData.followUpDate };
       if (activityData.followUpMethod) update.followUpMethod = activityData.followUpMethod;
-      await Lead.findByIdAndUpdate(leadId, update);
+      const updatedLead = await Lead.findByIdAndUpdate(leadId, update, { new: true }).select('assignedTo schoolName');
+      if (updatedLead?.assignedTo) {
+        const dueStr = new Date(activityData.followUpDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+        await createNotification(
+          updatedLead.assignedTo,
+          'follow_up',
+          `📅 Follow-up Scheduled: ${updatedLead.schoolName}`,
+          `Due ${dueStr}${activityData.followUpMethod ? ` via ${activityData.followUpMethod}` : ''}`,
+          `/leads/${leadId}`
+        );
+      }
     }
 
     res.status(201).json(populated);
