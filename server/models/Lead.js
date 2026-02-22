@@ -160,9 +160,11 @@ LeadSchema.pre('save', async function (next) {
     this.schoolId = `EDOS-${String(count + 1).padStart(4, '0')}`;
   }
 
-  // Calculate commission on Closed Won
-  if (this.currentStatus === 'Closed Won' && this.negotiatedPrice > 0) {
-    this.commissionAmount = this.negotiatedPrice * (this.commissionPercentage / 100);
+  // Always compute commission amount so reps can see projected earnings before close
+  if (this.negotiatedPrice > 0 && this.commissionPercentage >= 0) {
+    this.commissionAmount = parseFloat(
+      ((this.negotiatedPrice * this.commissionPercentage) / 100).toFixed(2)
+    );
   } else {
     this.commissionAmount = 0;
   }

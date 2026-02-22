@@ -204,10 +204,10 @@ exports.updateLead = async (req, res) => {
 
     const previousStatus = lead.currentStatus;
 
-    // Commission % — admin only
-    const adminOnlyFields = ['commissionPercentage'];
-    // Financial / assignment — admin or manager
-    const adminOrManagerFields = ['paymentStatus', 'amountPaid', 'assignedTo'];
+    // Commission % — admin or manager per lead
+    const adminOnlyFields = [];
+    // Financial / assignment / commission — admin or manager
+    const adminOrManagerFields = ['paymentStatus', 'amountPaid', 'assignedTo', 'commissionPercentage'];
 
     // Update fields
     Object.keys(req.body).forEach(key => {

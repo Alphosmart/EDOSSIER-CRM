@@ -440,16 +440,34 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
       </Section>
 
       <Section title="Commission & Assignment">
-        {isAdmin ? (
+        {isAdminOrManager ? (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
-            <input type="number" min="0" max="100" name="commissionPercentage" value={formData.commissionPercentage} onChange={handleChange} className="input-field" />
+            <input
+              type="number" min="0" max="100"
+              name="commissionPercentage"
+              value={formData.commissionPercentage}
+              onChange={handleChange}
+              className="input-field"
+            />
+            {formData.negotiatedPrice > 0 && (
+              <p className="text-xs text-green-600 mt-1 font-medium">
+                Commission value: {getCurrencySymbol(formData.currency)}
+                {((Number(formData.negotiatedPrice) * Number(formData.commissionPercentage)) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-0.5">Default from rep profile: {formData.commissionPercentage}%</p>
           </div>
         ) : (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
             <input type="number" value={formData.commissionPercentage} disabled className="input-field bg-gray-100 cursor-not-allowed" />
-            <p className="text-xs text-gray-400 mt-1">Set by admin</p>
+            {formData.negotiatedPrice > 0 && (
+              <p className="text-xs text-green-600 mt-1 font-medium">
+                = {getCurrencySymbol(formData.currency)}
+                {((Number(formData.negotiatedPrice) * Number(formData.commissionPercentage)) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </p>
+            )}
           </div>
         )}
 
