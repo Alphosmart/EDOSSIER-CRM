@@ -184,6 +184,57 @@ export default function SubscriptionPage() {
         )}
       </div>
 
+      {/* Plan Conversion Analysis */}
+      {data.conversionStats && data.conversionStats.total > 0 && (() => {
+        const PCT = (n) => data.conversionStats.total > 0 ? Math.round(n / data.conversionStats.total * 100) : 0;
+        const ALL_PLANS = ['Free', 'Basic', 'Deluxe', 'Premium', 'Enterprise', 'Custom'];
+        return (
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-1">Proposed vs Actual Plan</h3>
+            <p className="text-sm text-gray-500 mb-5">For closed deals — comparing the plan pitched to the plan signed</p>
+
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-green-50 rounded-xl">
+                <p className="text-3xl font-extrabold text-green-600">{data.conversionStats.matched}</p>
+                <p className="text-xs font-semibold text-green-700 mt-1">✓ Matched</p>
+                <p className="text-xs text-gray-500">{PCT(data.conversionStats.matched)}% of proposals</p>
+              </div>
+              <div className="text-center p-4 bg-blue-50 rounded-xl">
+                <p className="text-3xl font-extrabold text-blue-600">{data.conversionStats.upgraded}</p>
+                <p className="text-xs font-semibold text-blue-700 mt-1">↑ Upgraded</p>
+                <p className="text-xs text-gray-500">{PCT(data.conversionStats.upgraded)}% of proposals</p>
+              </div>
+              <div className="text-center p-4 bg-yellow-50 rounded-xl">
+                <p className="text-3xl font-extrabold text-yellow-600">{data.conversionStats.downgraded}</p>
+                <p className="text-xs font-semibold text-yellow-700 mt-1">↓ Downgraded</p>
+                <p className="text-xs text-gray-500">{PCT(data.conversionStats.downgraded)}% of proposals</p>
+              </div>
+            </div>
+
+            {/* Stacked bar chart: for each proposed plan, show actual plan outcomes */}
+            {data.planConversion && data.planConversion.length > 0 && (
+              <>
+                <p className="text-xs text-gray-400 mb-2 text-center">Each bar = a proposed plan. Segments show what plan was actually signed.</p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={data.planConversion} margin={{ bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="proposed" label={{ value: 'Proposed Plan', position: 'insideBottom', offset: -10 }} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Legend verticalAlign="top" />
+                    {ALL_PLANS.map((plan, i) => (
+                      <Bar key={plan} dataKey={plan} stackId="a" fill={COLORS[i % COLORS.length]} name={plan} />
+                    ))}
+                    <Bar key="None" dataKey="None" stackId="a" fill="#e5e7eb" name="No Plan Set" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Renewal Alerts */}
       {data.renewalAlerts && data.renewalAlerts.length > 0 && (
         <div className="card">
@@ -195,8 +246,9 @@ export default function SubscriptionPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-left text-gray-500 uppercase text-xs">
-                  <th className="px-4 py-3">School</th>
-                  <th className="px-4 py-3">Plan</th>
+                    <th className="px-4 py-3">School</th>
+                  <th className="px-4 py-3">Proposed</th>
+                    <th className="px-4 py-3">Plan</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Renewal Date</th>
                   <th className="px-4 py-3">Days Left</th>
@@ -213,7 +265,22 @@ export default function SubscriptionPage() {
                       </Link>
                       <p className="text-xs text-gray-500">{alert.schoolId}</p>
                     </td>
-                    <td className="px-4 py-3">{alert.subscriptionPlan || '—'}</td>
+                    <td className="px-4 py-3 text-gray-500">{alert.proposedPackage || '—'}</td>
+                    <td className="px-4 py-3">
+                      {alert.proposedPackage && alert.subscriptionPlan && alert.proposedPackage !== alert.subscriptionPlan ? (() => {
+                        const PLAN_ORDER = ['Free', 'Basic', 'Deluxe', 'Premium', 'Enterprise', 'Custom'];
+                        const ai = PLAN_ORDER.indexOf(alert.subscriptionPlan);
+                        const pi = PLAN_ORDER.indexOf(alert.proposedPackage);
+                        return (
+                          <span className="inline-flex items-center gap-1">
+                            <span className="font-medium">{alert.subscriptionPlan}</span>
+                            <span className={`px-1.5 py-0.5 text-xs rounded font-bold ${
+                              ai > pi ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                            }`}>{ai > pi ? '↑' : '↓'}</span>
+                          </span>
+                        );
+                      })() : <span>{alert.subscriptionPlan || '—'}</span>}
+                    </td>
                     <td className="px-4 py-3">{alert.subscriptionType || '—'}</td>
                     <td className="px-4 py-3">{formatDate(alert.renewalDate)}</td>
                     <td className="px-4 py-3">

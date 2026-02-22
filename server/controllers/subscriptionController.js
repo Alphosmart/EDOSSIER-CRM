@@ -1,6 +1,8 @@
 const Lead = require('../models/Lead');
 const { filterLeadsByRole } = require('../utils/queryHelpers');
 
+const PLAN_ORDER = ['Free', 'Basic', 'Deluxe', 'Premium', 'Enterprise', 'Custom'];
+
 // Helper: calculate MRR from a lead
 const calculateMRR = (lead) => {
   const price = lead.negotiatedPrice || 0;
@@ -52,6 +54,25 @@ exports.getSubscriptionSummary = async (req, res) => {
       planBreakdown[plan].revenue += l.negotiatedPrice || 0;
     });
 
+    // Plan conversion: proposedPackage → subscriptionPlan
+    const conversionMap = {};
+    let convMatched = 0, convUpgraded = 0, convDowngraded = 0;
+    leads.filter(l => l.proposedPackage).forEach(l => {
+      const proposed = l.proposedPackage;
+      const actual   = l.subscriptionPlan;
+      if (!conversionMap[proposed]) conversionMap[proposed] = { proposed };
+      if (actual) {
+        conversionMap[proposed][actual] = (conversionMap[proposed][actual] || 0) + 1;
+        const pi = PLAN_ORDER.indexOf(proposed);
+        const ai = PLAN_ORDER.indexOf(actual);
+        if (pi === ai)      convMatched++;
+        else if (ai > pi)  convUpgraded++;
+        else               convDowngraded++;
+      } else {
+        conversionMap[proposed]['None'] = (conversionMap[proposed]['None'] || 0) + 1;
+      }
+    });
+
     // Renewals
     const renewalsDue30 = subscribedLeads.filter(l => {
       if (!l.renewalDate) return false;
@@ -100,6 +121,13 @@ exports.getSubscriptionSummary = async (req, res) => {
       revenueAtRisk: Math.round(revenueAtRisk),
       avgRevenuePerSchool: Math.round(avgRevenuePerSchool),
       amountOutstanding: Math.round(amountOutstanding),
+      planConversion: Object.values(conversionMap),
+      conversionStats: {
+        matched:    convMatched,
+        upgraded:   convUpgraded,
+        downgraded: convDowngraded,
+        total:      convMatched + convUpgraded + convDowngraded,
+      },
       renewalAlerts: [...overdueRenewals, ...renewalsDue30].map(l => ({
         _id: l._id,
         schoolName: l.schoolName,
@@ -108,6 +136,7 @@ exports.getSubscriptionSummary = async (req, res) => {
         negotiatedPrice: l.negotiatedPrice,
         subscriptionType: l.subscriptionType,
         subscriptionPlan: l.subscriptionPlan,
+        proposedPackage: l.proposedPackage,
         daysUntilRenewal: Math.ceil((new Date(l.renewalDate) - now) / (1000 * 60 * 60 * 24)),
         territory: l.territory,
         assignedTo: l.assignedTo

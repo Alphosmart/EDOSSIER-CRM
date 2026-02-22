@@ -58,7 +58,11 @@ const LeadSchema = new mongoose.Schema({
   reminderSet: { type: Boolean, default: false },
 
   // Pricing & Revenue
-  proposedPackage: { type: String },
+  proposedPackage: {
+    type: String,
+    enum: ['Free', 'Basic', 'Deluxe', 'Premium', 'Enterprise', 'Custom'],
+    default: null
+  },
   proposedPrice: { type: Number, default: 0 },
   negotiatedPrice: { type: Number, default: 0 },
   expectedClosingDate: { type: Date },

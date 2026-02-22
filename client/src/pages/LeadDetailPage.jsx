@@ -376,6 +376,29 @@ export default function LeadDetailPage() {
                     <span className="ml-2 font-medium">{lead.subscriptionPlan}</span>
                   </div>
                 )}
+                {lead.proposedPackage && lead.subscriptionPlan && (() => {
+                  const PLAN_ORDER = ['Free', 'Basic', 'Deluxe', 'Premium', 'Enterprise', 'Custom'];
+                  const pi = PLAN_ORDER.indexOf(lead.proposedPackage);
+                  const ai = PLAN_ORDER.indexOf(lead.subscriptionPlan);
+                  const outcome = pi === ai ? 'match' : ai > pi ? 'upgrade' : 'downgrade';
+                  return (
+                    <div className="col-span-2">
+                      <span className="text-gray-500">Plan Outcome:</span>
+                      <span className="inline-flex items-center gap-2 ml-2">
+                        <span className="font-medium text-gray-600">{lead.proposedPackage}</span>
+                        <span className="text-gray-400">→</span>
+                        <span className="font-medium text-gray-900">{lead.subscriptionPlan}</span>
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-bold ${
+                          outcome === 'match'     ? 'bg-green-100 text-green-700' :
+                          outcome === 'upgrade'   ? 'bg-blue-100  text-blue-700'  :
+                                                    'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {outcome === 'match' ? '✓ Match' : outcome === 'upgrade' ? '↑ Upgrade' : '↓ Downgrade'}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })()}
                 {lead.storageSize && (
                   <div>
                     <span className="text-gray-500">Storage:</span>

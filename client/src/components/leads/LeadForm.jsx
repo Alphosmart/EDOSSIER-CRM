@@ -397,7 +397,10 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
       <Section title="Pricing & Revenue">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Package</label>
-          <input name="proposedPackage" value={formData.proposedPackage} onChange={handleChange} className="input-field" placeholder="e.g., Basic, Premium, Enterprise" />
+          <select name="proposedPackage" value={formData.proposedPackage} onChange={handleChange} className="input-field">
+            <option value="">Select Package</option>
+            {SUBSCRIPTION_PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Price ({getCurrencySymbol(formData.currency)})</label>
