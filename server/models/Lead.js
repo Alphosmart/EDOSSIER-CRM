@@ -117,6 +117,9 @@ const LeadSchema = new mongoose.Schema({
     default: null
   },
 
+  // Outcome tracking
+  closedAtFollowUp: { type: Number },  // which follow-up number closed the deal
+
   // Notes
   additionalNotes: { type: String },
 

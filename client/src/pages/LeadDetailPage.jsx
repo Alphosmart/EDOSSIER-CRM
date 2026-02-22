@@ -202,6 +202,12 @@ export default function LeadDetailPage() {
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Status</p>
                 <div className="mt-1"><StatusBadge status={lead.currentStatus} /></div>
+                {lead.closedAtFollowUp && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Closed at follow-up{' '}
+                    <span className="font-bold text-gray-700">#{lead.closedAtFollowUp}</span>
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Deal Value</p>

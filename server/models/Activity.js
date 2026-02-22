@@ -16,6 +16,8 @@ const ActivitySchema = new mongoose.Schema({
     type: String,
     enum: ['Call', 'WhatsApp', 'Email', 'Physical Visit']
   },
+  // True on the activity that sealed the outcome (Closed Won / Closed Lost)
+  isClosingActivity: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 

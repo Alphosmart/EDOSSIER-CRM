@@ -43,7 +43,21 @@ export default function ActivityTimeline({ activities }) {
         const colorClass = ACTIVITY_COLORS[activity.activityType] || 'bg-gray-100 text-gray-600';
 
         return (
-          <div key={activity._id || index} className="flex gap-3">
+          <div key={activity._id || index} className="space-y-1">
+            {activity.isClosingActivity && (
+              <div className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-md ${
+                activity.outcome === 'Closed Won'
+                  ? 'bg-green-100 text-green-700 border border-green-200'
+                  : 'bg-red-100 text-red-700 border border-red-200'
+              }`}>
+                <span>{activity.outcome === 'Closed Won' ? '🏆' : '❌'}</span>
+                <span>
+                  Deal {activity.outcome === 'Closed Won' ? 'Won' : 'Lost'} at Follow-up #{index + 1}
+                  {' '}(of {activities.length} total)
+                </span>
+              </div>
+            )}
+          <div className="flex gap-3">
             <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${colorClass}`}>
               <Icon className="w-4 h-4" />
             </div>
@@ -76,6 +90,7 @@ export default function ActivityTimeline({ activities }) {
                 </p>
               )}
             </div>
+          </div>
           </div>
         );
       })}

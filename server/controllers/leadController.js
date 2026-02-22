@@ -219,7 +219,17 @@ exports.updateLead = async (req, res) => {
 
     await lead.save();
 
-    // If status changed to Closed Won, create commission payout
+    // Stamp which follow-up closed the deal (Closed Won OR Closed Lost)
+    const isClosingTransition =
+      !['Closed Won', 'Closed Lost'].includes(previousStatus) &&
+      ['Closed Won', 'Closed Lost'].includes(lead.currentStatus);
+
+    if (isClosingTransition) {
+      const activityCount = await Activity.countDocuments({ leadId: lead._id });
+      lead.closedAtFollowUp = activityCount + 1; // +1 = the closing activity about to be logged
+      await lead.save();
+    }
+
     if (previousStatus !== 'Closed Won' && lead.currentStatus === 'Closed Won') {
       lead.actualClosingDate = lead.actualClosingDate || new Date();
       await lead.save();
@@ -232,13 +242,22 @@ exports.updateLead = async (req, res) => {
         commissionAmount: lead.commissionAmount
       });
 
-      // Log status change
       await Activity.create({
         leadId: lead._id,
         userId: req.user._id,
         activityType: 'Status Change',
         description: `Deal closed: ${lead.schoolName} - ₦${lead.negotiatedPrice?.toLocaleString()}`,
-        outcome: 'Closed Won'
+        outcome: 'Closed Won',
+        isClosingActivity: true
+      });
+    } else if (previousStatus !== 'Closed Lost' && lead.currentStatus === 'Closed Lost') {
+      await Activity.create({
+        leadId: lead._id,
+        userId: req.user._id,
+        activityType: 'Status Change',
+        description: `Deal lost: ${lead.schoolName} — moved from ${previousStatus}`,
+        outcome: 'Closed Lost',
+        isClosingActivity: true
       });
     } else if (previousStatus !== lead.currentStatus) {
       await Activity.create({
