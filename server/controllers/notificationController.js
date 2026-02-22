@@ -62,7 +62,7 @@ exports.remindLead = async (req, res) => {
     const dueStr = lead.nextFollowUpDate
       ? new Date(lead.nextFollowUpDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
       : 'no date set';
-    const sender = `${req.user.firstName} ${req.user.lastName}`;
+    const sender = (`${req.user.firstName || ''} ${req.user.lastName || ''}`).trim() || 'A manager';
 
     await Notification.create({
       userId: lead.assignedTo._id,
@@ -79,6 +79,7 @@ exports.remindLead = async (req, res) => {
       repName: `${lead.assignedTo.firstName} ${lead.assignedTo.lastName}`
     });
   } catch (err) {
+    console.error('remindLead error:', err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -110,7 +111,9 @@ exports.remindAllOverdue = async (req, res) => {
       repMap[uid].leads.push(l);
     });
 
-    const sender = `${req.user.firstName} ${req.user.lastName}`;
+    const senderFirst = req.user.firstName || '';
+    const senderLast = req.user.lastName || '';
+    const sender = `${senderFirst} ${senderLast}`.trim() || 'A manager';
     let repsNotified = 0;
 
     for (const uid of Object.keys(repMap)) {
@@ -122,7 +125,7 @@ exports.remindAllOverdue = async (req, res) => {
         type: 'follow_up',
         title: `⚠️ ${sender}: ${leads.length} overdue follow-up${leads.length > 1 ? 's' : ''}`,
         message: `Action needed: ${leadList}${extra}`,
-        link: '/leads?status=overdue'
+        link: '/leads'
       });
       repsNotified++;
     }
@@ -133,6 +136,7 @@ exports.remindAllOverdue = async (req, res) => {
       leadsCount: overdueLeads.length
     });
   } catch (err) {
+    console.error('remindAllOverdue error:', err);
     res.status(500).json({ message: err.message });
   }
 };

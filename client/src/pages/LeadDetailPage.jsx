@@ -114,7 +114,7 @@ export default function LeadDetailPage() {
       const { data } = await leadService.remindLead(id);
       toast.success(data.message);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to send reminder');
+      toast.error(error.response?.data?.message || error.message || 'Failed to send reminder');
     } finally {
       setRemindingRep(false);
     }

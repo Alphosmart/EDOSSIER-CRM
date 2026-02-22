@@ -154,7 +154,7 @@ export default function LeadsPage() {
                     const { data } = await leadService.remindAllOverdue();
                     toast.success(data.message);
                   } catch (err) {
-                    toast.error(err.response?.data?.message || 'Failed to send reminders');
+                    toast.error(err.response?.data?.message || err.message || 'Failed to send reminders');
                   } finally {
                     setRemindingOverdue(false);
                   }
