@@ -1,4 +1,4 @@
-import { timeAgo } from '../../utils/formatDate';
+import { timeAgo, formatDate } from '../../utils/formatDate';
 import {
   HiOutlinePhone, HiOutlineMail, HiOutlineChatAlt2,
   HiOutlineEye, HiOutlineDesktopComputer, HiOutlineDocumentText,
@@ -57,6 +57,18 @@ export default function ActivityTimeline({ activities }) {
               )}
               {activity.outcome && (
                 <p className="text-xs text-gray-500 mt-0.5">Outcome: {activity.outcome}</p>
+              )}
+              {activity.nextAction && (
+                <p className="text-xs text-gray-500 mt-0.5 italic">Next: {activity.nextAction}</p>
+              )}
+              {activity.followUpDate && (
+                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-2 py-1 rounded-md">
+                  <span>📅</span>
+                  <span className="font-medium">Follow-up: {formatDate(activity.followUpDate)}</span>
+                  {activity.followUpMethod && (
+                    <span className="text-amber-500">via {activity.followUpMethod}</span>
+                  )}
+                </div>
               )}
               {activity.userId && (
                 <p className="text-xs text-gray-400 mt-0.5">

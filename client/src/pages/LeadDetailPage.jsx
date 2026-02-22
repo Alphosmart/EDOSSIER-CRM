@@ -31,7 +31,9 @@ export default function LeadDetailPage() {
     activityType: 'Call',
     description: '',
     outcome: '',
-    nextAction: ''
+    nextAction: '',
+    followUpDate: '',
+    followUpMethod: ''
   });
 
   // Attachment state
@@ -98,7 +100,7 @@ export default function LeadDetailPage() {
       });
       toast.success('Activity logged');
       setShowActivityModal(false);
-      setActivityForm({ activityType: 'Call', description: '', outcome: '', nextAction: '' });
+      setActivityForm({ activityType: 'Call', description: '', outcome: '', nextAction: '', followUpDate: '', followUpMethod: '' });
       loadActivities();
     } catch (error) {
       toast.error('Failed to log activity');
@@ -657,13 +659,45 @@ export default function LeadDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Next Action</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Next Action / Notes</label>
             <input
               value={activityForm.nextAction}
               onChange={(e) => setActivityForm(prev => ({ ...prev, nextAction: e.target.value }))}
               className="input-field"
+              placeholder="e.g. Send pricing sheet, book demo..."
             />
           </div>
+
+          {/* Follow-up scheduling */}
+          <div className="border-t pt-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Schedule Next Follow-up</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Follow-up Date</label>
+                <input
+                  type="date"
+                  value={activityForm.followUpDate}
+                  onChange={(e) => setActivityForm(prev => ({ ...prev, followUpDate: e.target.value }))}
+                  className="input-field"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Method</label>
+                <select
+                  value={activityForm.followUpMethod}
+                  onChange={(e) => setActivityForm(prev => ({ ...prev, followUpMethod: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">Select method</option>
+                  {['Call', 'WhatsApp', 'Email', 'Physical Visit'].map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-3">
             <button type="submit" className="btn-primary">Log Activity</button>
             <button type="button" onClick={() => setShowActivityModal(false)} className="btn-secondary">Cancel</button>

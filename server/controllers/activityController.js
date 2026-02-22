@@ -58,6 +58,13 @@ exports.createActivity = async (req, res) => {
     const populated = await Activity.findById(activity._id)
       .populate('userId', 'firstName lastName');
 
+    // Auto-sync lead's next follow-up date whenever a follow-up is scheduled
+    if (activityData.followUpDate && leadId) {
+      const update = { nextFollowUpDate: activityData.followUpDate };
+      if (activityData.followUpMethod) update.followUpMethod = activityData.followUpMethod;
+      await Lead.findByIdAndUpdate(leadId, update);
+    }
+
     res.status(201).json(populated);
   } catch (error) {
     res.status(500).json({ message: error.message });
