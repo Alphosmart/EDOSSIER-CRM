@@ -5,12 +5,14 @@ const {
   updateLeadStatus, getOverdueLeads, getTodayLeads,
   importLeads, addAttachment, deleteAttachment
 } = require('../controllers/leadController');
+const { remindLead, remindAllOverdue } = require('../controllers/notificationController');
 const { protect, authorize } = require('../middleware/auth');
 const { uploadCsv, uploadAttachment } = require('../middleware/upload');
 
 // Special routes first (before :id param)
 router.get('/overdue', protect, getOverdueLeads);
 router.get('/today', protect, getTodayLeads);
+router.post('/remind-overdue', protect, authorize('manager', 'admin'), remindAllOverdue);
 
 // CSV import
 router.post('/import', protect, authorize('manager', 'admin'), (req, res, next) => {
@@ -26,6 +28,7 @@ router.post('/', protect, createLead);
 router.put('/:id', protect, updateLead);
 router.delete('/:id', protect, authorize('manager', 'admin'), deleteLead);
 router.put('/:id/status', protect, updateLeadStatus);
+router.post('/:id/remind', protect, authorize('manager', 'admin'), remindLead);
 
 // File attachments
 router.post('/:id/attachments', protect, (req, res, next) => {

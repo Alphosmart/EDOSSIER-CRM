@@ -22,5 +22,9 @@ export const leadService = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   deleteAttachment: (leadId, attachmentId) =>
-    api.delete(`/leads/${leadId}/attachments/${attachmentId}`)
+    api.delete(`/leads/${leadId}/attachments/${attachmentId}`),
+
+  // Reminders (admin/manager only)
+  remindLead: (id) => api.post(`/leads/${id}/remind`),
+  remindAllOverdue: () => api.post('/leads/remind-overdue')
 };

@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   HiOutlinePlus, HiOutlineSearch, HiOutlineUpload,
   HiOutlineX, HiOutlineDocumentText, HiOutlineCheckCircle,
-  HiOutlineUser
+  HiOutlineUser, HiOutlineBell
 } from 'react-icons/hi';
 
 export default function LeadsPage() {
@@ -138,13 +138,34 @@ export default function LeadsPage() {
         </div>
         <div className="flex items-center gap-2">
           {canImport && (
-            <button
-              onClick={() => setShowImport(true)}
-              className="btn-secondary flex items-center gap-2 text-sm"
-            >
-              <HiOutlineUpload className="w-4 h-4" />
-              Import CSV
-            </button>
+            <>
+              <button
+                onClick={() => setShowImport(true)}
+                className="btn-secondary flex items-center gap-2 text-sm"
+              >
+                <HiOutlineUpload className="w-4 h-4" />
+                Import CSV
+              </button>
+              <button
+                onClick={async () => {
+                  setRemindingOverdue(true);
+                  try {
+                    const { data } = await leadService.remindAllOverdue();
+                    toast.success(data.message);
+                  } catch (err) {
+                    toast.error(err.response?.data?.message || 'Failed to send reminders');
+                  } finally {
+                    setRemindingOverdue(false);
+                  }
+                }}
+                disabled={remindingOverdue}
+                className="btn-secondary flex items-center gap-2 text-sm text-amber-600 border-amber-200 hover:bg-amber-50 disabled:opacity-50"
+                title="Send in-app reminder to all reps with overdue follow-ups"
+              >
+                <HiOutlineBell className="w-4 h-4" />
+                {remindingOverdue ? 'Sending…' : 'Remind Overdue'}
+              </button>
+            </>
           )}
           <Link to="/leads/new" className="btn-primary flex items-center gap-2">
             <HiOutlinePlus className="w-5 h-5" />

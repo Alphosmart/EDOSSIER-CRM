@@ -15,7 +15,7 @@ import {
   HiOutlineArrowLeft, HiOutlinePencil, HiOutlineTrash,
   HiOutlinePhone, HiOutlineMail, HiOutlineLocationMarker,
   HiOutlineCalendar, HiOutlinePlus, HiOutlinePaperClip,
-  HiOutlineDownload, HiOutlineX, HiOutlineDocument
+  HiOutlineDownload, HiOutlineX, HiOutlineDocument, HiOutlineBell
 } from 'react-icons/hi';
 
 export default function LeadDetailPage() {
@@ -27,6 +27,7 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [remindingRep, setRemindingRep] = useState(false);
   const [activityForm, setActivityForm] = useState({
     activityType: 'Call',
     description: '',
@@ -104,6 +105,18 @@ export default function LeadDetailPage() {
       loadActivities();
     } catch (error) {
       toast.error('Failed to log activity');
+    }
+  };
+
+  const handleRemindRep = async () => {
+    setRemindingRep(true);
+    try {
+      const { data } = await leadService.remindLead(id);
+      toast.success(data.message);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to send reminder');
+    } finally {
+      setRemindingRep(false);
     }
   };
 
@@ -614,13 +627,26 @@ export default function LeadDetailPage() {
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Activity Log</h3>
-              <button
-                onClick={() => setShowActivityModal(true)}
-                className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center gap-1"
-              >
-                <HiOutlinePlus className="w-4 h-4" />
-                Log Activity
-              </button>
+              <div className="flex items-center gap-2">
+                {hasRole('manager', 'admin') && lead.assignedTo && (
+                  <button
+                    onClick={handleRemindRep}
+                    disabled={remindingRep}
+                    className="text-amber-600 hover:text-amber-700 text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+                    title={`Send follow-up reminder to ${lead.assignedTo.firstName} ${lead.assignedTo.lastName}`}
+                  >
+                    <HiOutlineBell className="w-4 h-4" />
+                    {remindingRep ? 'Sending…' : 'Remind Rep'}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowActivityModal(true)}
+                  className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center gap-1"
+                >
+                  <HiOutlinePlus className="w-4 h-4" />
+                  Log Activity
+                </button>
+              </div>
             </div>
             <ActivityTimeline activities={activities} />
           </div>
