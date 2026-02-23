@@ -20,11 +20,13 @@ const UserSchema = new mongoose.Schema({
     enum: ['sales_rep', 'team_lead', 'manager', 'admin'],
     default: 'sales_rep'
   },
-  territory: {
-    type: String,
-    enum: ['Kaduna', 'Abuja', 'Lagos', 'Other']
-  },
+  country: { type: String, default: 'Nigeria' },
+  territory: { type: String },
   defaultCommissionRate: { type: Number, default: 25, min: 0, max: 100 },
+  permissions: {
+    type: [String],
+    default: []
+  },
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

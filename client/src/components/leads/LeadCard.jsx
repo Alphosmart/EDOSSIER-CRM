@@ -3,7 +3,7 @@ import StatusBadge from '../common/StatusBadge';
 import { formatNaira } from '../../utils/formatCurrency';
 import { formatDate, isOverdue } from '../../utils/formatDate';
 import LeadStatusDropdown from './LeadStatusDropdown';
-import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar } from 'react-icons/hi';
+import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar, HiOutlinePencil } from 'react-icons/hi';
 
 export default function LeadCard({ lead, onStatusChange }) {
   const overdue = lead.nextFollowUpDate && isOverdue(lead.nextFollowUpDate) &&
@@ -76,8 +76,18 @@ export default function LeadCard({ lead, onStatusChange }) {
       </div>
 
       {lead.assignedTo && (
-        <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-gray-500">
-          Assigned to: {lead.assignedTo.firstName} {lead.assignedTo.lastName}
+        <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
+          <div className="text-xs text-gray-500">
+            Assigned to: {lead.assignedTo.firstName} {lead.assignedTo.lastName}
+          </div>
+          <Link 
+            to={`/leads/${lead._id}`} 
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors"
+            title="View and edit lead details"
+          >
+            <HiOutlinePencil className="w-3.5 h-3.5" />
+            Edit
+          </Link>
         </div>
       )}
     </div>

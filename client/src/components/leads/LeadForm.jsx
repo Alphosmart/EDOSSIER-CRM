@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { PERMISSIONS } from '../../utils/permissions';
 import {
   LEAD_STATUSES, TERRITORIES, SCHOOL_TYPES,
   FOLLOW_UP_METHODS, PAYMENT_STATUSES,
@@ -26,9 +27,13 @@ const initialFormData = {
 };
 
 export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
-  const { user, hasRole } = useAuth();
-  const isAdmin = hasRole('admin');
-  const isAdminOrManager = hasRole('admin', 'manager');
+  const { user, hasPermission } = useAuth();
+  
+  // Permission checks
+  const canEditCommission = hasPermission(PERMISSIONS.LEADS_EDIT_COMMISSION);
+  const canEditPayment = hasPermission(PERMISSIONS.LEADS_EDIT_PAYMENT);
+  const canAssignLeads = hasPermission(PERMISSIONS.LEADS_ASSIGN);
+  
   const [formData, setFormData] = useState(initialFormData);
   const [loading, setLoading] = useState(false);
 
@@ -59,10 +64,29 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
+    // Prevent scroll during state update
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    
+    // Restore scroll position without losing focus
+    setTimeout(() => {
+      window.scrollTo(0, scrollTop);
+    }, 0);
+  };
+
+  // Prevent mouse wheel from changing number inputs (causes page jump)
+  const handleNumberWheel = (e) => {
+    e.target.blur();
+  };
+
+  // Prevent page jump when focusing on number inputs
+  const handleNumberFocus = (e) => {
+    e.target.addEventListener('wheel', (evt) => evt.preventDefault(), { passive: false });
   };
 
   const handleSubmit = async (e) => {
@@ -75,6 +99,13 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         'relationshipStrength', 'probabilityOfClosing', 'commissionPercentage'].forEach(field => {
         if (submitData[field] !== '' && submitData[field] !== undefined) {
           submitData[field] = Number(submitData[field]);
+        }
+      });
+      // Convert empty strings to null for enum fields to avoid validation errors
+      ['subscriptionType', 'subscriptionPlan', 'storageSize', 'schoolType', 
+        'leadSource', 'followUpMethod', 'paymentStatus', 'territory'].forEach(field => {
+        if (submitData[field] === '') {
+          submitData[field] = null;
         }
       });
       await onSubmit(submitData);
@@ -108,7 +139,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Number of Students</label>
-          <input type="number" name="numberOfStudents" value={formData.numberOfStudents} onChange={handleChange} className="input-field" />
+          <input type="number" name="numberOfStudents" value={formData.numberOfStudents} onChange={handleChange} onWheel={handleNumberWheel} className="input-field" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
@@ -176,7 +207,18 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Probability of Closing (%)</label>
-          <input type="number" min="0" max="100" name="probabilityOfClosing" value={formData.probabilityOfClosing} onChange={handleChange} className="input-field" />
+          <input 
+            type="text" 
+            inputMode="numeric" 
+            pattern="[0-9]*" 
+            min="0" 
+            max="100" 
+            name="probabilityOfClosing" 
+            value={formData.probabilityOfClosing} 
+            onChange={handleChange} 
+            className="input-field" 
+            placeholder="0-100"
+          />
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Response Summary</label>
@@ -225,11 +267,11 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Price (₦)</label>
-          <input type="number" name="proposedPrice" value={formData.proposedPrice} onChange={handleChange} className="input-field" />
+          <input type="number" name="proposedPrice" value={formData.proposedPrice} onChange={handleChange} onWheel={handleNumberWheel} className="input-field" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Negotiated Price (₦)</label>
-          <input type="number" name="negotiatedPrice" value={formData.negotiatedPrice} onChange={handleChange} className="input-field" />
+          <input type="number" name="negotiatedPrice" value={formData.negotiatedPrice} onChange={handleChange} onWheel={handleNumberWheel} className="input-field" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Expected Closing Date</label>
@@ -237,35 +279,51 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-          {isAdminOrManager ? (
+          {canEditPayment ? (
             <select name="paymentStatus" value={formData.paymentStatus} onChange={handleChange} className="input-field">
               {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           ) : (
-            <input value={formData.paymentStatus} disabled className="input-field bg-gray-100 cursor-not-allowed" />
+            <div>
+              <input value={formData.paymentStatus} disabled className="input-field bg-gray-100 cursor-not-allowed" />
+              <p className="text-xs text-gray-400 mt-1">Requires payment permission</p>
+            </div>
           )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid (₦)</label>
-          {isAdminOrManager ? (
-            <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} className="input-field" />
+          {canEditPayment ? (
+            <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} onWheel={handleNumberWheel} className="input-field" />
           ) : (
-            <input type="number" value={formData.amountPaid} disabled className="input-field bg-gray-100 cursor-not-allowed" />
+            <div>
+              <input type="number" value={formData.amountPaid} disabled className="input-field bg-gray-100 cursor-not-allowed" />
+              <p className="text-xs text-gray-400 mt-1">Requires payment permission</p>
+            </div>
           )}
         </div>
       </Section>
 
       <Section title="Commission & Assignment">
-        {isAdmin ? (
+        {canEditCommission ? (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
-            <input type="number" min="0" max="100" name="commissionPercentage" value={formData.commissionPercentage} onChange={handleChange} className="input-field" />
+            <input 
+              type="text" 
+              inputMode="numeric" 
+              pattern="[0-9]*" 
+              name="commissionPercentage" 
+              value={formData.commissionPercentage} 
+              onChange={handleChange} 
+              className="input-field" 
+              placeholder="0-100"
+              autoComplete="off"
+            />
           </div>
         ) : (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
             <input type="number" value={formData.commissionPercentage} disabled className="input-field bg-gray-100 cursor-not-allowed" />
-            <p className="text-xs text-gray-400 mt-1">Set by admin</p>
+            <p className="text-xs text-gray-400 mt-1">Requires commission permission</p>
           </div>
         )}
         <div>
@@ -281,9 +339,20 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Relationship Strength (1-5)</label>
-          <input type="number" min="1" max="5" name="relationshipStrength" value={formData.relationshipStrength} onChange={handleChange} className="input-field" />
+          <input 
+            type="text" 
+            inputMode="numeric" 
+            pattern="[1-5]" 
+            min="1" 
+            max="5" 
+            name="relationshipStrength" 
+            value={formData.relationshipStrength} 
+            onChange={handleChange} 
+            className="input-field" 
+            placeholder="1-5"
+          />
         </div>
-        {isAdminOrManager && users.length > 0 && (
+        {canAssignLeads && users.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
             <select name="assignedTo" value={formData.assignedTo} onChange={handleChange} className="input-field">

@@ -7,7 +7,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import { LEAD_STATUSES, TERRITORIES } from '../utils/constants';
 import { formatNaira } from '../utils/formatCurrency';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlineSearch, HiOutlineFilter } from 'react-icons/hi';
+import { HiOutlinePlus, HiOutlineSearch, HiOutlineFilter, HiOutlinePencil } from 'react-icons/hi';
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState([]);
@@ -146,6 +146,7 @@ export default function LeadsPage() {
                 <th className="pb-3 font-semibold text-gray-700 text-right">Deal Value</th>
                 <th className="pb-3 font-semibold text-gray-700 text-right">Probability</th>
                 <th className="pb-3 font-semibold text-gray-700">Assigned To</th>
+                <th className="pb-3 font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -172,6 +173,16 @@ export default function LeadsPage() {
                   <td className="py-3 text-right">{lead.probabilityOfClosing || 0}%</td>
                   <td className="py-3 text-sm">
                     {lead.assignedTo?.firstName} {lead.assignedTo?.lastName}
+                  </td>
+                  <td className="py-3">
+                    <Link 
+                      to={`/leads/${lead._id}`} 
+                      className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors"
+                      title="View and edit lead details"
+                    >
+                      <HiOutlinePencil className="w-3.5 h-3.5" />
+                      Edit
+                    </Link>
                   </td>
                 </tr>
               ))}

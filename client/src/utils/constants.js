@@ -61,3 +61,27 @@ export const NIGERIAN_STATES = [
   'Lagos', 'Nassarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau',
   'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara'
 ];
+
+export const COUNTRIES = [
+  'Nigeria',
+  'Ghana',
+  'Kenya',
+  'South Africa',
+  'United Kingdom',
+  'United States',
+  'Canada',
+  'Uganda',
+  'Tanzania',
+  'Rwanda',
+  'Ethiopia',
+  'Egypt',
+  'Morocco',
+  'Senegal',
+  'Ivory Coast',
+  'Cameroon',
+  'Zimbabwe',
+  'Zambia',
+  'Botswana',
+  'Namibia',
+  'Other'
+];

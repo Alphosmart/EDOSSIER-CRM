@@ -3,9 +3,10 @@ import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
-import { ROLES, ROLE_LABELS, TERRITORIES } from '../utils/constants';
+import PermissionsEditor from '../components/users/PermissionsEditor';
+import { ROLES, ROLE_LABELS, NIGERIAN_STATES, COUNTRIES } from '../utils/constants';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineEye } from 'react-icons/hi';
+import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineEye, HiOutlineShieldCheck } from 'react-icons/hi';
 
 export default function UsersPage() {
   const { user: currentUser, hasRole } = useAuth();
@@ -15,9 +16,10 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [showPerformance, setShowPerformance] = useState(null);
   const [performance, setPerformance] = useState(null);
+  const [showPermissions, setShowPermissions] = useState(null);
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '',
-    role: 'sales_rep', territory: '', phone: ''
+    role: 'sales_rep', country: 'Nigeria', territory: '', phone: '', defaultCommissionRate: 25
   });
 
   useEffect(() => {
@@ -58,7 +60,8 @@ export default function UsersPage() {
     setEditingUser(u);
     setForm({
       firstName: u.firstName, lastName: u.lastName, email: u.email,
-      password: '', role: u.role, territory: u.territory || '', phone: u.phone || ''
+      password: '', role: u.role, country: u.country || 'Nigeria', territory: u.territory || '', phone: u.phone || '',
+      defaultCommissionRate: u.defaultCommissionRate || 25
     });
     setShowModal(true);
   };
@@ -86,7 +89,7 @@ export default function UsersPage() {
 
   const resetForm = () => {
     setEditingUser(null);
-    setForm({ firstName: '', lastName: '', email: '', password: '', role: 'sales_rep', territory: '', phone: '' });
+    setForm({ firstName: '', lastName: '', email: '', password: '', role: 'sales_rep', country: 'Nigeria', territory: '', phone: '', defaultCommissionRate: 25 });
   };
 
   if (loading) return <LoadingSpinner size="lg" />;
@@ -114,7 +117,8 @@ export default function UsersPage() {
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Territory</th>
+                <th className="px-4 py-3">Location</th>
+                <th className="px-4 py-3">Commission %</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Actions</th>
               </tr>
@@ -136,7 +140,15 @@ export default function UsersPage() {
                       {ROLE_LABELS[u.role] || u.role}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{u.territory || '—'}</td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm">
+                      <div className="text-gray-700">{u.territory || '—'}</div>
+                      <div className="text-gray-400 text-xs">{u.country || 'Nigeria'}</div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-gray-700 font-medium">{u.defaultCommissionRate || 25}%</span>
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 text-xs rounded-full font-medium ${
                       u.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -159,6 +171,13 @@ export default function UsersPage() {
                             title="Edit"
                           >
                             <HiOutlinePencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setShowPermissions(u)}
+                            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                            title="Manage Permissions"
+                          >
+                            <HiOutlineShieldCheck className="w-4 h-4" />
                           </button>
                           {u._id !== currentUser._id && (
                             <button
@@ -239,18 +258,42 @@ export default function UsersPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Territory</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+              <select
+                value={form.country}
+                onChange={e => setForm(p => ({ ...p, country: e.target.value }))}
+                className="input-field"
+              >
+                {COUNTRIES.map(country => (
+                  <option key={country} value={country}>{country}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {form.country === 'Nigeria' ? 'State' : 'State/Region/City'}
+            </label>
+            {form.country === 'Nigeria' ? (
               <select
                 value={form.territory}
                 onChange={e => setForm(p => ({ ...p, territory: e.target.value }))}
                 className="input-field"
               >
-                <option value="">Select...</option>
-                {TERRITORIES.map(t => (
-                  <option key={t} value={t}>{t}</option>
+                <option value="">Select State...</option>
+                {NIGERIAN_STATES.map(state => (
+                  <option key={state} value={state}>{state}</option>
                 ))}
               </select>
-            </div>
+            ) : (
+              <input
+                type="text"
+                value={form.territory}
+                onChange={e => setForm(p => ({ ...p, territory: e.target.value }))}
+                className="input-field"
+                placeholder="Enter state, region, or city"
+              />
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
@@ -259,6 +302,19 @@ export default function UsersPage() {
               onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
               className="input-field"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Default Commission Rate (%)</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={form.defaultCommissionRate}
+              onChange={e => setForm(p => ({ ...p, defaultCommissionRate: Number(e.target.value) }))}
+              className="input-field"
+              placeholder="0-100"
+            />
+            <p className="text-xs text-gray-500 mt-1">Used when no commission is specified on a lead</p>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="submit" className="btn-primary">
@@ -311,6 +367,16 @@ export default function UsersPage() {
           </div>
         )}
       </Modal>
+
+      {/* Permissions Editor */}
+      {showPermissions && (
+        <PermissionsEditor
+          userId={showPermissions._id}
+          userName={`${showPermissions.firstName} ${showPermissions.lastName}`}
+          onClose={() => setShowPermissions(null)}
+          onUpdate={loadUsers}
+        />
+      )}
     </div>
   );
 }
