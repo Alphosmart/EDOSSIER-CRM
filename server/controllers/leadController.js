@@ -204,10 +204,10 @@ exports.updateLead = async (req, res) => {
 
     const previousStatus = lead.currentStatus;
 
-    // Commission % — admin or manager per lead
-    const adminOnlyFields = [];
-    // Financial / assignment / commission — admin or manager
-    const adminOrManagerFields = ['paymentStatus', 'amountPaid', 'assignedTo', 'commissionPercentage'];
+    // Admin only fields (commission, payment)
+    const adminOnlyFields = ['commissionPercentage', 'paymentStatus', 'amountPaid'];
+    // Assignment — admin or manager
+    const adminOrManagerFields = ['assignedTo'];
 
     // Update fields
     Object.keys(req.body).forEach(key => {
@@ -232,6 +232,15 @@ exports.updateLead = async (req, res) => {
 
     if (previousStatus !== 'Closed Won' && lead.currentStatus === 'Closed Won') {
       lead.actualClosingDate = lead.actualClosingDate || new Date();
+      
+      // Use assigned user's default commission rate if not set on lead
+      if (!lead.commissionPercentage || lead.commissionPercentage === 0) {
+        const assignedUser = await require('../models/User').findById(lead.assignedTo);
+        if (assignedUser && assignedUser.defaultCommissionRate) {
+          lead.commissionPercentage = assignedUser.defaultCommissionRate;
+        }
+      }
+      
       await lead.save();
 
       await CommissionPayout.create({

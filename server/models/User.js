@@ -21,12 +21,14 @@ const UserSchema = new mongoose.Schema({
     enum: ['sales_rep', 'team_lead', 'manager', 'admin'],
     default: 'sales_rep'
   },
-  territory: {
-    type: String
-    // Now stores any Nigerian state or country — no enum restriction
-  },
+  country: { type: String, default: 'Nigeria' },
+  territory: { type: String },
   defaultCommissionRate: { type: Number, default: 25, min: 0, max: 100 },
   monthlyTarget: { type: Number, default: 0 },   // target deal value in USD per month
+  permissions: {
+    type: [String],
+    default: []
+  },
   isActive: { type: Boolean, default: true },
   // Password reset
   resetPasswordToken: { type: String, select: false },

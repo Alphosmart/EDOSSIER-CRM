@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { PERMISSIONS } from '../../utils/permissions';
 import {
   LEAD_STATUSES, SCHOOL_TYPES,
   FOLLOW_UP_METHODS, PAYMENT_STATUSES,
@@ -32,9 +33,14 @@ const initialFormData = {
 };
 
 export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, hasPermission } = useAuth();
   const isAdmin = hasRole('admin');
   const isAdminOrManager = hasRole('admin', 'manager');
+  
+  // Permission checks
+  const canEditCommission = hasPermission(PERMISSIONS.LEADS_EDIT_COMMISSION);
+  const canEditPayment = hasPermission(PERMISSIONS.LEADS_EDIT_PAYMENT);
+  const canAssignLeads = hasPermission(PERMISSIONS.LEADS_ASSIGN);
   const [formData, setFormData] = useState(initialFormData);
   const [loading, setLoading] = useState(false);
   const [rateMap, setRateMap] = useState(null);

@@ -3,10 +3,11 @@ import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
+import PermissionsEditor from '../components/users/PermissionsEditor';
 import { ROLES, ROLE_LABELS } from '../utils/constants';
 import { NIGERIAN_STATES } from '../utils/nigerianStatesLgas';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineEye } from 'react-icons/hi';
+import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineEye, HiOutlineShieldCheck } from 'react-icons/hi';
 
 export default function UsersPage() {
   const { user: currentUser, hasRole } = useAuth();
@@ -16,6 +17,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [showPerformance, setShowPerformance] = useState(null);
   const [performance, setPerformance] = useState(null);
+  const [showPermissions, setShowPermissions] = useState(null);
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '',
     role: 'sales_rep', territory: '', phone: ''
@@ -160,6 +162,13 @@ export default function UsersPage() {
                             title="Edit"
                           >
                             <HiOutlinePencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setShowPermissions(u)}
+                            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                            title="Manage Permissions"
+                          >
+                            <HiOutlineShieldCheck className="w-4 h-4" />
                           </button>
                           {u._id !== currentUser._id && (
                             <button
@@ -312,6 +321,16 @@ export default function UsersPage() {
           </div>
         )}
       </Modal>
+
+      {/* Permissions Editor */}
+      {showPermissions && (
+        <PermissionsEditor
+          userId={showPermissions._id}
+          userName={`${showPermissions.firstName} ${showPermissions.lastName}`}
+          onClose={() => setShowPermissions(null)}
+          onUpdate={loadUsers}
+        />
+      )}
     </div>
   );
 }

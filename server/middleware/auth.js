@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { hasPermission, hasAnyPermission, hasAllPermissions } = require('../utils/permissions');
 
 // Protect routes - require authentication
 const protect = async (req, res, next) => {
@@ -43,4 +44,46 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { protect, authorize };
+// Check for specific permission
+const requirePermission = (permission) => {
+  return (req, res, next) => {
+    if (!hasPermission(req.user, permission)) {
+      return res.status(403).json({
+        message: 'You do not have permission to access this resource'
+      });
+    }
+    next();
+  };
+};
+
+// Check for any of the specified permissions
+const requireAnyPermission = (...permissions) => {
+  return (req, res, next) => {
+    if (!hasAnyPermission(req.user, permissions)) {
+      return res.status(403).json({
+        message: 'You do not have permission to access this resource'
+      });
+    }
+    next();
+  };
+};
+
+// Check for all of the specified permissions
+const requireAllPermissions = (...permissions) => {
+  return (req, res, next) => {
+    if (!hasAllPermissions(req.user, permissions)) {
+      return res.status(403).json({
+        message: 'You do not have permission to access this resource'
+      });
+    }
+    next();
+  };
+};
+
+module.exports = { 
+  protect, 
+  authorize, 
+  requirePermission, 
+  requireAnyPermission, 
+  requireAllPermissions 
+};

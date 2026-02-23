@@ -20,7 +20,7 @@ const generateRefreshToken = (id) => {
 // @access  Admin only
 exports.register = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, whatsapp, role, territory, defaultCommissionRate } = req.body;
+    const { firstName, lastName, email, password, phone, whatsapp, role, country, territory, defaultCommissionRate } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -35,6 +35,7 @@ exports.register = async (req, res) => {
       phone,
       whatsapp,
       role,
+      country,
       territory,
       defaultCommissionRate
     });
@@ -45,6 +46,7 @@ exports.register = async (req, res) => {
       lastName: user.lastName,
       email: user.email,
       role: user.role,
+      country: user.country,
       territory: user.territory,
       token: generateAccessToken(user._id),
       refreshToken: generateRefreshToken(user._id)
@@ -94,6 +96,7 @@ exports.login = async (req, res) => {
       lastName: user.lastName,
       email: user.email,
       role: user.role,
+      country: user.country,
       territory: user.territory,
       token: accessToken,
       refreshToken

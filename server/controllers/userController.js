@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Lead = require('../models/Lead');
+const { PERMISSIONS, getDefaultPermissions, getUserPermissions: getUserPermissionsUtil } = require('../utils/permissions');
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -33,7 +34,7 @@ exports.getUserById = async (req, res) => {
 // @access  Admin
 exports.updateUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, whatsapp, role, territory, defaultCommissionRate, isActive, monthlyTarget } = req.body;
+    const { firstName, lastName, email, phone, whatsapp, role, country, territory, defaultCommissionRate, isActive, monthlyTarget } = req.body;
 
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -46,10 +47,17 @@ exports.updateUser = async (req, res) => {
     user.phone = phone !== undefined ? phone : user.phone;
     user.whatsapp = whatsapp !== undefined ? whatsapp : user.whatsapp;
     user.role = role || user.role;
+    user.country = country || user.country;
     user.territory = territory || user.territory;
     user.defaultCommissionRate = defaultCommissionRate !== undefined ? defaultCommissionRate : user.defaultCommissionRate;
     user.isActive = isActive !== undefined ? isActive : user.isActive;
     if (monthlyTarget !== undefined) user.monthlyTarget = monthlyTarget;
+    
+    // Reset permissions if role changes (optional - admin can override)
+    if (role && role !== user.role) {
+      user.permissions = getDefaultPermissions(role);
+    }
+    
     user.updatedAt = Date.now();
 
     const updatedUser = await user.save();
@@ -141,6 +149,84 @@ exports.getUserPerformance = async (req, res) => {
       totalCommission,
       pipelineValue,
       weightedForecast
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get all available permissions
+// @route   GET /api/users/permissions/available
+// @access  Admin
+exports.getAvailablePermissions = async (req, res) => {
+  try {
+    res.json(PERMISSIONS);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get user's permissions
+// @route   GET /api/users/:id/permissions
+// @access  Admin
+exports.getUserPermissions = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const permissions = getUserPermissionsUtil(user);
+    res.json({
+      role: user.role,
+      customPermissions: user.permissions || [],
+      allPermissions: permissions
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update user's permissions
+// @route   PUT /api/users/:id/permissions
+// @access  Admin
+exports.updateUserPermissions = async (req, res) => {
+  try {
+    const { permissions } = req.body;
+    
+    if (!Array.isArray(permissions)) {
+      return res.status(400).json({ message: 'Permissions must be an array' });
+    }
+    
+    // Validate all permissions are valid
+    const validPermissions = Object.values(PERMISSIONS);
+    const invalidPermissions = permissions.filter(p => !validPermissions.includes(p));
+    
+    if (invalidPermissions.length > 0) {
+      return res.status(400).json({ 
+        message: 'Invalid permissions provided', 
+        invalid: invalidPermissions 
+      });
+    }
+    
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    user.permissions = permissions;
+    user.updatedAt = Date.now();
+    await user.save();
+    
+    res.json({
+      message: 'Permissions updated successfully',
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        permissions: user.permissions
+      }
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

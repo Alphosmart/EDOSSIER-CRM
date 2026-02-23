@@ -4,7 +4,7 @@ import { formatNaira } from '../../utils/formatCurrency';
 import { formatDate, isOverdue } from '../../utils/formatDate';
 import LeadStatusDropdown from './LeadStatusDropdown';
 import { useAuth } from '../../context/AuthContext';
-import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar, HiOutlineUser } from 'react-icons/hi';
+import { HiOutlinePhone, HiOutlineMail, HiOutlineCalendar, HiOutlineUser, HiOutlinePencil } from 'react-icons/hi';
 
 // Days since status last changed (lead.updatedAt)
 function AgingBadge({ updatedAt }) {
@@ -91,16 +91,26 @@ export default function LeadCard({ lead, onStatusChange }) {
         )}
       </div>
 
-      <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-        {lead.assignedTo && (
-          <span>Assigned: {lead.assignedTo.firstName} {lead.assignedTo.lastName}</span>
-        )}
-        {isBroughtByMe && (
-          <span className="flex items-center gap-1 text-primary-600 font-medium">
-            <HiOutlineUser className="w-3.5 h-3.5" />
-            Brought by you
-          </span>
-        )}
+      <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-3">
+          {lead.assignedTo && (
+            <span className="text-gray-500">Assigned: {lead.assignedTo.firstName} {lead.assignedTo.lastName}</span>
+          )}
+          {isBroughtByMe && (
+            <span className="flex items-center gap-1 text-primary-600 font-medium">
+              <HiOutlineUser className="w-3.5 h-3.5" />
+              Brought by you
+            </span>
+          )}
+        </div>
+        <Link 
+          to={`/leads/${lead._id}`} 
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors"
+          title="View and edit lead details"
+        >
+          <HiOutlinePencil className="w-3.5 h-3.5" />
+          Edit
+        </Link>
       </div>
     </div>
   );
