@@ -18,6 +18,7 @@ const filterLeadsByRole = (user) => {
     case 'team_lead':
       return { ...base, $or: [{ territory: user.territory }, { createdBy: user._id }] };
     case 'manager':
+    case 'bursar':
     case 'admin':
       return base;
     default:

@@ -18,7 +18,7 @@ const UserSchema = new mongoose.Schema({
   whatsapp: { type: String },
   role: {
     type: String,
-    enum: ['sales_rep', 'team_lead', 'manager', 'admin'],
+    enum: ['sales_rep', 'team_lead', 'manager', 'bursar', 'admin'],
     default: 'sales_rep'
   },
   country: { type: String, default: 'Nigeria' },

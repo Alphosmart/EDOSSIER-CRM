@@ -81,8 +81,9 @@ function DisburseModal({ commission, rateMap, onClose, onConfirm }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function CommissionsPage() {
   const { user, hasRole } = useAuth();
-  const isManagerOrAdmin = hasRole('manager', 'admin');
-  const isAdmin = hasRole('admin');
+  const isManagerOrAdmin = hasRole('manager', 'bursar', 'admin');
+  const canApprove = hasRole('manager', 'admin');
+  const isAdminOrBursar = hasRole('admin', 'bursar');
 
   const [commissions, setCommissions] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -204,7 +205,7 @@ export default function CommissionsPage() {
   const steps = [
     { key: 'Pending',   label: 'Pending',   by: 'Auto-created' },
     { key: 'Approved',  label: 'Approved',  by: 'Manager / Admin' },
-    { key: 'Disbursed', label: 'Disbursed', by: 'Admin' },
+    { key: 'Disbursed', label: 'Disbursed', by: 'Admin / Bursar' },
     { key: 'Paid',      label: 'Confirmed', by: 'Sales Rep' },
   ];
   const stepColors = {
@@ -381,14 +382,14 @@ export default function CommissionsPage() {
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1">
                             {/* Manager or Admin: Approve when Pending */}
-                            {isManagerOrAdmin && c.status === 'Pending' && (
+                            {canApprove && c.status === 'Pending' && (
                               <button onClick={() => handleApprove(c._id)}
                                 className="px-2 py-1 text-xs bg-sky-600 text-white rounded hover:bg-sky-700 whitespace-nowrap">
                                 ✓ Approve
                               </button>
                             )}
-                            {/* Admin: Disburse when Approved */}
-                            {isAdmin && c.status === 'Approved' && (
+                            {/* Admin or Bursar: Disburse when Approved */}
+                            {isAdminOrBursar && c.status === 'Approved' && (
                               <button onClick={() => setDisburseTarget(c)}
                                 className="px-2 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 whitespace-nowrap">
                                 💸 Mark Disbursed
@@ -412,8 +413,8 @@ export default function CommissionsPage() {
                                 <option value="received">✓ Received</option>
                               </select>
                             )}
-                            {/* Admin can also force-confirm receipt if needed */}
-                            {isAdmin && c.status === 'Disbursed' && (
+                            {/* Admin or Bursar can also force-confirm receipt if needed */}
+                            {isAdminOrBursar && c.status === 'Disbursed' && (
                               <button onClick={() => handleConfirmReceipt(c._id)}
                                 className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap">
                                 ✓ Confirm Receipt

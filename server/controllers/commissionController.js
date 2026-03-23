@@ -8,6 +8,7 @@ const filterByRole = (user) => {
       return { userId: user._id };
     case 'team_lead':
     case 'manager':
+    case 'bursar':
     case 'admin':
       return {};
     default:
@@ -151,7 +152,7 @@ exports.confirmReceipt = async (req, res) => {
     }
 
     // Only the commission owner can confirm
-    if (!commission.userId.equals(req.user._id) && req.user.role !== 'admin') {
+    if (!commission.userId.equals(req.user._id) && !['admin', 'bursar'].includes(req.user.role)) {
       return res.status(403).json({ message: 'Only the assigned marketer can confirm receipt' });
     }
 

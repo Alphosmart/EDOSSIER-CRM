@@ -76,15 +76,15 @@ function AppRoutes() {
           <Route path="/commissions" element={<CommissionsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
 
-          {/* Manager / Team Lead / Admin */}
-          <Route element={<ProtectedRoute roles={['admin', 'manager', 'team_lead']} />}>
+          {/* Manager / Team Lead / Bursar / Admin */}
+          <Route element={<ProtectedRoute roles={['admin', 'manager', 'bursar', 'team_lead']} />}>
             <Route path="/subscriptions" element={<SubscriptionPage />} />
             <Route path="/forecast" element={<ForecastPage />} />
             <Route path="/reports" element={<ReportsPage />} />
           </Route>
 
-          {/* Admin / Manager only */}
-          <Route element={<ProtectedRoute roles={['admin', 'manager']} />}>
+          {/* Admin / Manager / Bursar only */}
+          <Route element={<ProtectedRoute roles={['admin', 'manager', 'bursar']} />}>
             <Route path="/monthly-performance" element={<MonthlyPerformancePage />} />
             <Route path="/users" element={<UsersPage />} />
           </Route>

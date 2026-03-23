@@ -27,7 +27,7 @@ import {
 
 export default function DashboardPage() {
   const { user, hasRole } = useAuth();
-  const isAdminOrManager = hasRole('admin', 'manager');
+  const isAdminOrManager = hasRole('admin', 'manager', 'bursar');
 
   const [kpis, setKpis] = useState(null);
   const [pipeline, setPipeline] = useState([]);

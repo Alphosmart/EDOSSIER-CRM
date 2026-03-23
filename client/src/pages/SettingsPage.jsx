@@ -4,22 +4,25 @@ import { useSearchParams } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { userService } from '../services/userService';
 import toast from 'react-hot-toast';
-import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil, HiOutlineGlobe, HiOutlineTrash, HiOutlineRefresh, HiOutlineCheckCircle } from 'react-icons/hi';
+import { HiOutlineUser, HiOutlineLockClosed, HiOutlineCurrencyDollar, HiOutlineCheck, HiOutlinePencil, HiOutlineGlobe, HiOutlineTrash, HiOutlineRefresh, HiOutlineCheckCircle, HiOutlineShieldCheck } from 'react-icons/hi';
 import { exchangeRateService, invalidateRateCache } from '../services/exchangeRateService';
 import { ROLE_LABELS } from '../utils/constants';
+import RoleMatrix from '../components/settings/RoleMatrix';
 
 export default function SettingsPage() {
   const { user, hasRole } = useAuth();
   const isAdmin = hasRole('admin');
-  const canManageRates = hasRole('manager') || hasRole('admin');
+  const isAdminOrBursar = hasRole('admin', 'bursar');
+  const canManageRates = hasRole('manager', 'admin', 'bursar');
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('profile');
 
   // Auto-select tab from query param (e.g. /settings?tab=commission)
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t === 'commission' && isAdmin) setTab('commission');
-  }, [searchParams, isAdmin]);
+    if (t === 'commission' && isAdminOrBursar) setTab('commission');
+    if (t === 'role-matrix' && isAdmin) setTab('role-matrix');
+  }, [searchParams, isAdminOrBursar]);
   const [passwords, setPasswords] = useState({
     currentPassword: '',
     newPassword: '',
@@ -43,7 +46,7 @@ export default function SettingsPage() {
   const [savingRate, setSavingRate] = useState({}); // { userId: bool }
 
   useEffect(() => {
-    if (tab === 'commission' && isAdmin) {
+    if (tab === 'commission' && isAdminOrBursar) {
       loadUsers();
     }
     if (tab === 'exchangeRates' && canManageRates) {
@@ -233,7 +236,7 @@ export default function SettingsPage() {
         >
           <HiOutlineLockClosed className="w-4 h-4" /> Security
         </button>
-        {isAdmin && (
+        {isAdminOrBursar && (
           <button
             onClick={() => setTab('commission')}
             className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
@@ -251,6 +254,16 @@ export default function SettingsPage() {
             }`}
           >
             <HiOutlineGlobe className="w-4 h-4" /> Exchange Rates
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            onClick={() => setTab('role-matrix')}
+            className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
+              tab === 'role-matrix' ? 'border-b-2 border-primary-600 text-primary-600' : 'text-gray-500'
+            }`}
+          >
+            <HiOutlineShieldCheck className="w-4 h-4" /> Role Matrix
           </button>
         )}
       </div>
@@ -344,8 +357,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ── Commission Rates (admin only) ── */}
-      {tab === 'commission' && isAdmin && (
+      {/* ── Commission Rates (admin / bursar) ── */}
+      {tab === 'commission' && isAdminOrBursar && (
         <div className="space-y-4">
           <div className="flex items-start justify-between">
             <div>
@@ -644,6 +657,8 @@ export default function SettingsPage() {
           </p>
         </div>
       )}
+
+      {tab === 'role-matrix' && isAdmin && <RoleMatrix />}
     </div>
   );
 }

@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
   };
 
   const isAdmin = () => hasRole('admin');
-  const isManager = () => hasRole('manager', 'admin');
+  const isManager = () => hasRole('manager', 'bursar', 'admin');
   const isTeamLead = () => hasRole('team_lead', 'manager', 'admin');
 
   // Get all permissions for current user

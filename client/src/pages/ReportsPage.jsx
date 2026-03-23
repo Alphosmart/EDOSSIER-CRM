@@ -16,7 +16,7 @@ const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 
 export default function ReportsPage() {
   const { user, hasRole } = useAuth();
-  const isAdminOrManager = hasRole('admin', 'manager');
+  const isAdminOrManager = hasRole('admin', 'manager', 'bursar');
   const [activeTab, setActiveTab] = useState('sales');
   const [loading, setLoading] = useState(false);
   const [salesReport, setSalesReport] = useState(null);
@@ -93,7 +93,7 @@ export default function ReportsPage() {
   const tabs = [
     { id: 'sales', label: 'Sales Report' },
     { id: 'commission', label: 'Commission Report' },
-    ...(hasRole('manager', 'admin') ? [{ id: 'territory', label: 'Territory Report' }] : [])
+    ...(hasRole('manager', 'admin', 'bursar') ? [{ id: 'territory', label: 'Territory Report' }] : [])
   ];
 
   return (

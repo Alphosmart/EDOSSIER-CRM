@@ -35,7 +35,7 @@ const initialFormData = {
 export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
   const { user, hasRole, hasPermission } = useAuth();
   const isAdmin = hasRole('admin');
-  const isAdminOrManager = hasRole('admin', 'manager');
+  const isAdminOrManager = hasRole('admin', 'manager', 'bursar');
   
   // Permission checks
   const canEditCommission = hasPermission(PERMISSIONS.LEADS_EDIT_COMMISSION);

@@ -204,15 +204,15 @@ exports.updateLead = async (req, res) => {
 
     const previousStatus = lead.currentStatus;
 
-    // Admin only fields (commission, payment)
-    const adminOnlyFields = ['commissionPercentage', 'paymentStatus', 'amountPaid'];
+    // Financial fields
+    const financialFields = ['commissionPercentage', 'paymentStatus', 'amountPaid'];
     // Assignment — admin or manager
     const adminOrManagerFields = ['assignedTo'];
 
     // Update fields
     Object.keys(req.body).forEach(key => {
       if (key === '_id' || key === 'schoolId') return;
-      if (adminOnlyFields.includes(key) && req.user.role !== 'admin') return;
+      if (financialFields.includes(key) && !['admin', 'bursar'].includes(req.user.role)) return;
       if (adminOrManagerFields.includes(key) && !['admin', 'manager'].includes(req.user.role)) return;
       lead[key] = req.body[key];
     });

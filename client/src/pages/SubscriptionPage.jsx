@@ -20,7 +20,7 @@ const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 
 export default function SubscriptionPage() {
   const { user, hasRole } = useAuth();
-  const isAdminOrManager = hasRole('admin', 'manager');
+  const isAdminOrManager = hasRole('admin', 'manager', 'bursar');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rateMap, setRateMap] = useState({ NGN: 1, USD: 1650 });

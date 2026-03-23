@@ -34,7 +34,7 @@ export const FOLLOW_UP_METHODS = ['Call', 'WhatsApp', 'Email', 'Physical Visit']
 
 export const PAYMENT_STATUSES = ['Not Paid', 'Part Payment', 'Paid Fully'];
 
-export const ROLES = ['sales_rep', 'team_lead', 'manager', 'admin'];
+export const ROLES = ['sales_rep', 'team_lead', 'manager', 'bursar', 'admin'];
 
 export const STATUS_COLORS = {
   'Not Interested': 'bg-gray-100 text-gray-700',
@@ -52,6 +52,7 @@ export const ROLE_LABELS = {
   sales_rep: 'Sales Rep',
   team_lead: 'Team Lead',
   manager: 'Manager',
+  bursar: 'Bursar',
   admin: 'Admin'
 };
 
