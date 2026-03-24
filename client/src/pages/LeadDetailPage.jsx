@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { leadService } from '../services/leadService';
+import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
+import { PERMISSIONS } from '../utils/permissions';
 import LeadForm from '../components/leads/LeadForm';
 import ActivityTimeline from '../components/leads/ActivityTimeline';
 import StatusBadge from '../components/common/StatusBadge';
@@ -21,11 +23,21 @@ import {
 export default function LeadDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, hasPermission } = useAuth();
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
+  const [reassignForm, setReassignForm] = useState({
+    assignedTo: '',
+    reason: '',
+    commissionSplitEnabled: false,
+    originatorCommissionPercentage: 0,
+    assigneeCommissionPercentage: 0
+  });
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [remindingRep, setRemindingRep] = useState(false);
   const [activityForm, setActivityForm] = useState({
@@ -48,6 +60,12 @@ export default function LeadDetailPage() {
     getCachedRateMap().then(setRateMap);
   }, [id]);
 
+  useEffect(() => {
+    if (user && hasPermission(PERMISSIONS.LEADS_ASSIGN)) {
+      loadAssignableUsers();
+    }
+  }, [user?._id, user?.role]);
+
   const loadLead = async () => {
     try {
       const { data } = await leadService.getLeadById(id);
@@ -69,6 +87,15 @@ export default function LeadDetailPage() {
     }
   };
 
+  const loadAssignableUsers = async () => {
+    try {
+      const { data } = await userService.getAll();
+      setUsers((data || []).filter(u => u?.isActive));
+    } catch (error) {
+      console.error('Failed to load users for reassignment');
+    }
+  };
+
   const handleUpdate = async (formData) => {
     try {
       await leadService.updateLead(id, formData);
@@ -78,6 +105,68 @@ export default function LeadDetailPage() {
       loadActivities();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to update lead');
+    }
+  };
+
+  const openReassignModal = () => {
+    const totalCommission = Number(lead?.commissionPercentage || 0);
+    const originatorShare = Number(lead?.originatorCommissionPercentage || 0);
+    setReassignForm({
+      assignedTo: lead?.assignedTo?._id || '',
+      reason: '',
+      commissionSplitEnabled: Boolean(lead?.commissionSplitEnabled),
+      originatorCommissionPercentage: originatorShare,
+      assigneeCommissionPercentage: Math.max(totalCommission - originatorShare, 0)
+    });
+    setShowReassignModal(true);
+  };
+
+  const clampShare = (value, total) => {
+    const n = Number(value || 0);
+    if (Number.isNaN(n)) return 0;
+    if (n < 0) return 0;
+    if (n > total) return total;
+    return n;
+  };
+
+  const handleOriginatorShareChange = (value) => {
+    const total = Number(lead?.commissionPercentage || 0);
+    const originator = clampShare(value, total);
+    setReassignForm((prev) => ({
+      ...prev,
+      originatorCommissionPercentage: originator,
+      assigneeCommissionPercentage: Math.max(total - originator, 0)
+    }));
+  };
+
+  const handleAssigneeShareChange = (value) => {
+    const total = Number(lead?.commissionPercentage || 0);
+    const assignee = clampShare(value, total);
+    setReassignForm((prev) => ({
+      ...prev,
+      assigneeCommissionPercentage: assignee,
+      originatorCommissionPercentage: Math.max(total - assignee, 0)
+    }));
+  };
+
+  const handleReassignLead = async (e) => {
+    e.preventDefault();
+    setReassigning(true);
+    try {
+      const payload = {
+        assignedTo: reassignForm.assignedTo,
+        reason: reassignForm.reason,
+        commissionSplitEnabled: reassignForm.commissionSplitEnabled,
+        originatorCommissionPercentage: Number(reassignForm.originatorCommissionPercentage || 0)
+      };
+      await leadService.reassignLead(id, payload);
+      toast.success('Lead reassigned successfully');
+      setShowReassignModal(false);
+      await Promise.all([loadLead(), loadActivities()]);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to reassign lead');
+    } finally {
+      setReassigning(false);
     }
   };
 
@@ -162,6 +251,11 @@ export default function LeadDetailPage() {
 
   const overdueFollowUp = lead.nextFollowUpDate && isOverdue(lead.nextFollowUpDate) &&
     !['Closed Won', 'Closed Lost', 'Not Interested'].includes(lead.currentStatus);
+  const canReassign = hasPermission(PERMISSIONS.LEADS_ASSIGN);
+  const splitEnabled = Boolean(lead.commissionSplitEnabled);
+  const originatorPct = Number(lead.originatorCommissionPercentage || 0);
+  const assigneePct = Math.max(Number(lead.commissionPercentage || 0) - originatorPct, 0);
+  const totalCommissionPool = Number(lead.commissionPercentage || 0);
 
   if (editing) {
     return (
@@ -173,7 +267,7 @@ export default function LeadDetailPage() {
           <h1 className="page-title">Edit Lead</h1>
         </div>
         <div className="card">
-          <LeadForm lead={lead} onSubmit={handleUpdate} onCancel={() => setEditing(false)} />
+          <LeadForm lead={lead} users={users} onSubmit={handleUpdate} onCancel={() => setEditing(false)} />
         </div>
       </div>
     );
@@ -518,7 +612,17 @@ export default function LeadDetailPage() {
 
           {/* Assignment */}
           <div className="card">
-            <h3 className="text-lg font-semibold mb-3">Assignment</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Assignment</h3>
+              {canReassign && (
+                <button
+                  onClick={openReassignModal}
+                  className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                >
+                  Reassign
+                </button>
+              )}
+            </div>
             <div className="space-y-2 text-sm">
               <div>
                 <span className="text-gray-500">Assigned To:</span>
@@ -550,6 +654,34 @@ export default function LeadDetailPage() {
                 <span className="text-gray-500">Strength:</span>
                 <span className="ml-2">{'★'.repeat(lead.relationshipStrength || 0)}{'☆'.repeat(5 - (lead.relationshipStrength || 0))}</span>
               </div>
+              <div>
+                <span className="text-gray-500">Commission Split:</span>
+                {splitEnabled ? (
+                  <span className="ml-2">
+                    <span className="font-medium">Assignee {assigneePct}%</span>
+                    <span className="text-gray-400"> • </span>
+                    <span className="font-medium">Originator {originatorPct}%</span>
+                  </span>
+                ) : (
+                  <span className="ml-2">No split</span>
+                )}
+              </div>
+              {lead.reassignmentHistory?.length > 0 && (
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-gray-500 mb-1">Reassignment History:</p>
+                  <ul className="space-y-1 text-xs text-gray-600">
+                    {lead.reassignmentHistory.slice().reverse().slice(0, 3).map((item) => (
+                      <li key={item._id}>
+                        {item.fromUser?.firstName || 'Unknown'} {item.fromUser?.lastName || ''}
+                        {' '}→{' '}
+                        {item.toUser?.firstName || 'Unknown'} {item.toUser?.lastName || ''}
+                        {' · '}
+                        {formatDate(item.reassignedAt)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 
@@ -652,6 +784,106 @@ export default function LeadDetailPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={showReassignModal}
+        onClose={() => setShowReassignModal(false)}
+        title="Reassign Lead"
+      >
+        <form onSubmit={handleReassignLead} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
+            <select
+              value={reassignForm.assignedTo}
+              onChange={(e) => setReassignForm(prev => ({ ...prev, assignedTo: e.target.value }))}
+              className="input-field"
+              required
+            >
+              <option value="">Select user</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.firstName} {u.lastName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+            <input
+              value={reassignForm.reason}
+              onChange={(e) => setReassignForm(prev => ({ ...prev, reason: e.target.value }))}
+              className="input-field"
+              placeholder="e.g. Territory handover"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={reassignForm.commissionSplitEnabled}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                if (!checked) {
+                  setReassignForm((prev) => ({
+                    ...prev,
+                    commissionSplitEnabled: false,
+                    originatorCommissionPercentage: 0,
+                    assigneeCommissionPercentage: totalCommissionPool
+                  }));
+                  return;
+                }
+                setReassignForm((prev) => ({
+                  ...prev,
+                  commissionSplitEnabled: true,
+                  assigneeCommissionPercentage: Math.max(totalCommissionPool - Number(prev.originatorCommissionPercentage || 0), 0)
+                }));
+              }}
+              className="rounded"
+            />
+            Split commission with lead originator
+          </label>
+
+          {reassignForm.commissionSplitEnabled && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Originator Share (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max={totalCommissionPool}
+                  value={reassignForm.originatorCommissionPercentage}
+                  onChange={(e) => handleOriginatorShareChange(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assignee Share (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max={totalCommissionPool}
+                  value={reassignForm.assigneeCommissionPercentage}
+                  onChange={(e) => handleAssigneeShareChange(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <p className="text-xs text-gray-500 md:col-span-2">
+                Total commission pool: {totalCommissionPool}% (remaining is auto-assigned to the other person)
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button type="submit" disabled={reassigning} className="btn-primary">
+              {reassigning ? 'Saving...' : 'Save Reassignment'}
+            </button>
+            <button type="button" onClick={() => setShowReassignModal(false)} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Log Activity Modal */}
       <Modal

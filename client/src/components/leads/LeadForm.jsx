@@ -27,6 +27,7 @@ const initialFormData = {
   currentSystemUsed: '', painPoints: '', decisionTimeline: '', competitorMentioned: '',
   relationshipStrength: '', probabilityOfClosing: '',
   commissionPercentage: 25, territory: '', additionalNotes: '',
+  commissionSplitEnabled: false, originatorCommissionPercentage: 0,
   assignedTo: '', lga: '',
   subscriptionType: '', subscriptionStartDate: '', renewalDate: '',
   subscriptionPlan: '', storageSize: ''
@@ -34,8 +35,6 @@ const initialFormData = {
 
 export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
   const { user, hasRole, hasPermission } = useAuth();
-  const isAdmin = hasRole('admin');
-  const isAdminOrManager = hasRole('admin', 'manager', 'bursar');
   
   // Permission checks
   const canEditCommission = hasPermission(PERMISSIONS.LEADS_EDIT_COMMISSION);
@@ -120,7 +119,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
       const submitData = { ...formData };
       // Convert numeric fields
       ['numberOfStudents', 'proposedPrice', 'negotiatedPrice', 'amountPaid',
-        'relationshipStrength', 'probabilityOfClosing', 'commissionPercentage'].forEach(field => {
+        'relationshipStrength', 'probabilityOfClosing', 'commissionPercentage', 'originatorCommissionPercentage'].forEach(field => {
         if (submitData[field] !== '' && submitData[field] !== undefined) {
           submitData[field] = Number(submitData[field]);
         }
@@ -424,7 +423,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-          {isAdminOrManager ? (
+          {canEditPayment ? (
             <select name="paymentStatus" value={formData.paymentStatus} onChange={handleChange} className="input-field">
               {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -434,7 +433,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid ({getCurrencySymbol(formData.currency)})</label>
-          {isAdminOrManager ? (
+          {canEditPayment ? (
             <>
               <input type="number" name="amountPaid" value={formData.amountPaid} onChange={handleChange} className="input-field" />
               {usdPreview(formData.amountPaid)}
@@ -446,7 +445,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
       </Section>
 
       <Section title="Commission & Assignment">
-        {isAdminOrManager ? (
+        {canEditCommission ? (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commission (%)</label>
             <input
@@ -481,7 +480,7 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">Relationship Strength (1-5)</label>
           <input type="number" min="1" max="5" name="relationshipStrength" value={formData.relationshipStrength} onChange={handleChange} className="input-field" />
         </div>
-        {isAdminOrManager && users.length > 0 && (
+        {canAssignLeads && users.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
             <select name="assignedTo" value={formData.assignedTo} onChange={handleChange} className="input-field">
@@ -490,6 +489,40 @@ export default function LeadForm({ lead, onSubmit, onCancel, users = [] }) {
                 <option key={u._id} value={u._id}>{u.firstName} {u.lastName}</option>
               ))}
             </select>
+          </div>
+        )}
+
+        {canAssignLeads && (
+          <div className="md:col-span-2 space-y-3 rounded-lg border border-gray-200 p-3">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                name="commissionSplitEnabled"
+                checked={Boolean(formData.commissionSplitEnabled)}
+                onChange={handleChange}
+                className="rounded"
+                disabled={Boolean(lead?.createdBy?._id || lead?.createdBy) && (lead?.createdBy?._id || lead?.createdBy) === formData.assignedTo}
+              />
+              Split commission with lead originator
+            </label>
+
+            {Boolean(formData.commissionSplitEnabled) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Originator Share (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max={formData.commissionPercentage || 0}
+                  name="originatorCommissionPercentage"
+                  value={formData.originatorCommissionPercentage}
+                  onChange={handleChange}
+                  className="input-field"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Assignee share: {Math.max(Number(formData.commissionPercentage || 0) - Number(formData.originatorCommissionPercentage || 0), 0)}%
+                </p>
+              </div>
+            )}
           </div>
         )}
       </Section>

@@ -87,12 +87,21 @@ const LeadSchema = new mongoose.Schema({
   // Commission
   commissionPercentage: { type: Number, default: 25, min: 0, max: 100 },
   commissionAmount: { type: Number, default: 0 },
+  commissionSplitEnabled: { type: Boolean, default: false },
+  originatorCommissionPercentage: { type: Number, default: 0, min: 0, max: 100 },
 
   // Territory & Assignment (Nigerian state name)
   territory: { type: String },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },  // who originally brought this lead
   lga: { type: String },
+  reassignmentHistory: [{
+    fromUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    toUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    reassignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    reason: { type: String },
+    reassignedAt: { type: Date, default: Date.now }
+  }],
 
   // International fields (Layer 1 + Layer 2)
   country: { type: String, default: 'Nigeria' },

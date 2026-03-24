@@ -6,6 +6,12 @@ const CommissionPayoutSchema = new mongoose.Schema({
   dealAmount: { type: Number, required: true },
   commissionPercentage: { type: Number, required: true },
   commissionAmount: { type: Number, required: true },
+  payoutRole: {
+    type: String,
+    enum: ['owner', 'originator', 'assignee'],
+    default: 'owner'
+  },
+  note: { type: String },
   status: {
     type: String,
     enum: ['Pending', 'Approved', 'Disbursed', 'Paid'],

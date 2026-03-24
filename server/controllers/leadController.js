@@ -2,10 +2,75 @@ const Lead = require('../models/Lead');
 const Activity = require('../models/Activity');
 const CommissionPayout = require('../models/CommissionPayout');
 const AuditLog = require('../models/AuditLog');
+const User = require('../models/User');
+const { createNotification } = require('./notificationController');
+const { hasPermission, PERMISSIONS } = require('../utils/permissions');
 const csv = require('csv-parse/sync');
 const fs = require('fs');
 const path = require('path');
 const { filterLeadsByRole } = require('../utils/queryHelpers');
+
+const canAssignLead = (user) => hasPermission(user, PERMISSIONS.LEADS_ASSIGN);
+
+const calculateCommissionAmount = (dealAmount, percentage) => {
+  if (!dealAmount || !percentage) return 0;
+  return parseFloat(((dealAmount * percentage) / 100).toFixed(2));
+};
+
+const createCommissionPayoutsForLead = async (lead) => {
+  const existingPayouts = await CommissionPayout.countDocuments({ leadId: lead._id });
+  if (existingPayouts > 0) return;
+
+  const totalPct = Number(lead.commissionPercentage || 0);
+  const dealAmount = Number(lead.negotiatedPrice || 0);
+  if (!dealAmount || !totalPct) return;
+
+  const splitAllowed =
+    lead.commissionSplitEnabled &&
+    lead.createdBy &&
+    lead.assignedTo &&
+    lead.createdBy.toString() !== lead.assignedTo.toString() &&
+    Number(lead.originatorCommissionPercentage || 0) > 0;
+
+  if (splitAllowed) {
+    const originatorPct = Math.min(Number(lead.originatorCommissionPercentage || 0), totalPct);
+    const assigneePct = Math.max(totalPct - originatorPct, 0);
+
+    const payoutDocs = [];
+    if (assigneePct > 0) {
+      payoutDocs.push({
+        userId: lead.assignedTo,
+        leadId: lead._id,
+        dealAmount,
+        commissionPercentage: assigneePct,
+        commissionAmount: calculateCommissionAmount(dealAmount, assigneePct),
+        payoutRole: 'assignee',
+        note: 'Assignee share from split commission'
+      });
+    }
+    payoutDocs.push({
+      userId: lead.createdBy,
+      leadId: lead._id,
+      dealAmount,
+      commissionPercentage: originatorPct,
+      commissionAmount: calculateCommissionAmount(dealAmount, originatorPct),
+      payoutRole: 'originator',
+      note: 'Originator share for bringing the lead'
+    });
+
+    await CommissionPayout.insertMany(payoutDocs);
+    return;
+  }
+
+  await CommissionPayout.create({
+    userId: lead.assignedTo,
+    leadId: lead._id,
+    dealAmount,
+    commissionPercentage: totalPct,
+    commissionAmount: calculateCommissionAmount(dealAmount, totalPct),
+    payoutRole: 'owner'
+  });
+};
 
 // @desc    Get all leads (filtered by role)
 // @route   GET /api/leads
@@ -71,7 +136,10 @@ exports.getLeadById = async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.id)
       .populate('assignedTo', 'firstName lastName email territory')
-      .populate('createdBy', 'firstName lastName email');
+      .populate('createdBy', 'firstName lastName email')
+      .populate('reassignmentHistory.fromUser', 'firstName lastName email')
+      .populate('reassignmentHistory.toUser', 'firstName lastName email')
+      .populate('reassignmentHistory.reassignedBy', 'firstName lastName email');
 
     if (!lead) {
       return res.status(404).json({ message: 'Lead not found' });
@@ -102,6 +170,12 @@ exports.createLead = async (req, res) => {
 
     // Always record who brought this lead
     leadData.createdBy = req.user._id;
+    if (leadData.commissionSplitEnabled === undefined) {
+      leadData.commissionSplitEnabled = false;
+    }
+    if (leadData.originatorCommissionPercentage === undefined) {
+      leadData.originatorCommissionPercentage = 0;
+    }
 
     // Sales reps always own the leads they create — ignore any submitted assignedTo
     if (!['admin', 'manager'].includes(req.user.role)) {
@@ -130,7 +204,7 @@ exports.createLead = async (req, res) => {
       // Look up the assigned user's rate if different from the creator
       const assignedUserId = leadData.assignedTo?.toString();
       if (assignedUserId && assignedUserId !== req.user._id.toString()) {
-        const assignedUser = await require('../models/User').findById(assignedUserId).select('defaultCommissionRate');
+        const assignedUser = await User.findById(assignedUserId).select('defaultCommissionRate');
         leadData.commissionPercentage = assignedUser?.defaultCommissionRate || req.user.defaultCommissionRate || 25;
       } else {
         leadData.commissionPercentage = req.user.defaultCommissionRate || 25;
@@ -203,21 +277,75 @@ exports.updateLead = async (req, res) => {
     }
 
     const previousStatus = lead.currentStatus;
+    const previousAssignedTo = lead.assignedTo;
 
     // Financial fields
     const financialFields = ['commissionPercentage', 'paymentStatus', 'amountPaid'];
-    // Assignment — admin or manager
-    const adminOrManagerFields = ['assignedTo'];
+    // Assignment and split rules are controlled by users with lead assignment permission
+    const assignmentFields = ['assignedTo', 'commissionSplitEnabled', 'originatorCommissionPercentage'];
 
     // Update fields
     Object.keys(req.body).forEach(key => {
-      if (key === '_id' || key === 'schoolId') return;
+      if (['_id', 'schoolId', 'createdBy', 'reassignmentHistory', 'commissionAmount'].includes(key)) return;
       if (financialFields.includes(key) && !['admin', 'bursar'].includes(req.user.role)) return;
-      if (adminOrManagerFields.includes(key) && !['admin', 'manager'].includes(req.user.role)) return;
+      if (assignmentFields.includes(key) && !canAssignLead(req.user)) return;
       lead[key] = req.body[key];
     });
 
+    // If lead is handled by the same person who brought it, split commission is not applicable.
+    if (lead.createdBy && lead.assignedTo && lead.createdBy.toString() === lead.assignedTo.toString()) {
+      lead.commissionSplitEnabled = false;
+      lead.originatorCommissionPercentage = 0;
+    }
+
+    if (lead.commissionSplitEnabled) {
+      const originatorPct = Number(lead.originatorCommissionPercentage || 0);
+      const totalPct = Number(lead.commissionPercentage || 0);
+      if (originatorPct < 0 || originatorPct > totalPct) {
+        return res.status(400).json({
+          message: 'Originator split percentage must be between 0 and total commission percentage'
+        });
+      }
+    }
+
+    const assignmentChanged =
+      previousAssignedTo &&
+      lead.assignedTo &&
+      previousAssignedTo.toString() !== lead.assignedTo.toString();
+
+    if (assignmentChanged) {
+      lead.reassignmentHistory.push({
+        fromUser: previousAssignedTo,
+        toUser: lead.assignedTo,
+        reassignedBy: req.user._id,
+        reason: req.body.reassignmentReason || 'Reassigned during lead update'
+      });
+    }
+
     await lead.save();
+
+    if (assignmentChanged) {
+      const [fromUser, toUser] = await Promise.all([
+        User.findById(previousAssignedTo).select('firstName lastName'),
+        User.findById(lead.assignedTo).select('firstName lastName')
+      ]);
+
+      await Activity.create({
+        leadId: lead._id,
+        userId: req.user._id,
+        activityType: 'Note Added',
+        description: `Lead reassigned from ${fromUser ? `${fromUser.firstName} ${fromUser.lastName}` : 'previous assignee'} to ${toUser ? `${toUser.firstName} ${toUser.lastName}` : 'new assignee'}`,
+        outcome: 'Assignment updated'
+      });
+
+      createNotification(
+        lead.assignedTo,
+        'follow_up',
+        `New lead assigned: ${lead.schoolName}`,
+        `You were assigned this lead for follow-up by ${req.user.firstName || 'a manager'} ${req.user.lastName || ''}`.trim(),
+        `/leads/${lead._id}`
+      );
+    }
 
     // Stamp which follow-up closed the deal (Closed Won OR Closed Lost)
     const isClosingTransition =
@@ -235,7 +363,7 @@ exports.updateLead = async (req, res) => {
       
       // Use assigned user's default commission rate if not set on lead
       if (!lead.commissionPercentage || lead.commissionPercentage === 0) {
-        const assignedUser = await require('../models/User').findById(lead.assignedTo);
+        const assignedUser = await User.findById(lead.assignedTo);
         if (assignedUser && assignedUser.defaultCommissionRate) {
           lead.commissionPercentage = assignedUser.defaultCommissionRate;
         }
@@ -243,13 +371,7 @@ exports.updateLead = async (req, res) => {
       
       await lead.save();
 
-      await CommissionPayout.create({
-        userId: lead.assignedTo,
-        leadId: lead._id,
-        dealAmount: lead.negotiatedPrice,
-        commissionPercentage: lead.commissionPercentage,
-        commissionAmount: lead.commissionAmount
-      });
+      await createCommissionPayoutsForLead(lead);
 
       await Activity.create({
         leadId: lead._id,
@@ -283,6 +405,137 @@ exports.updateLead = async (req, res) => {
       .populate('createdBy', 'firstName lastName email');
 
     res.json(updatedLead);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Reassign lead and optionally configure split commission
+// @route   PUT /api/leads/:id/reassign
+// @access  Private (users with lead assignment permission)
+exports.reassignLead = async (req, res) => {
+  try {
+    if (!canAssignLead(req.user)) {
+      return res.status(403).json({ message: 'You do not have permission to reassign leads' });
+    }
+
+    const { assignedTo, reason, commissionSplitEnabled, originatorCommissionPercentage } = req.body;
+    if (!assignedTo) {
+      return res.status(400).json({ message: 'assignedTo is required' });
+    }
+
+    const lead = await Lead.findById(req.params.id)
+      .populate('assignedTo', 'firstName lastName email territory')
+      .populate('createdBy', 'firstName lastName email');
+
+    if (!lead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    const targetUser = await User.findById(assignedTo).select('firstName lastName email isActive');
+    if (!targetUser || !targetUser.isActive) {
+      return res.status(400).json({ message: 'Selected user is not available for assignment' });
+    }
+
+    const previousAssignedTo = lead.assignedTo?._id || lead.assignedTo;
+    const assignmentChanged = previousAssignedTo.toString() !== targetUser._id.toString();
+    const splitFlagProvided = commissionSplitEnabled !== undefined;
+    const originatorPctProvided = originatorCommissionPercentage !== undefined;
+
+    if (!assignmentChanged && !splitFlagProvided && !originatorPctProvided) {
+      return res.status(400).json({ message: 'No reassignment or split changes detected' });
+    }
+
+    let previousAssigneeUser = null;
+    if (assignmentChanged) {
+      previousAssigneeUser = await User.findById(previousAssignedTo).select('firstName lastName');
+      lead.assignedTo = targetUser._id;
+      lead.reassignmentHistory.push({
+        fromUser: previousAssignedTo,
+        toUser: targetUser._id,
+        reassignedBy: req.user._id,
+        reason: reason || 'Lead reassigned for continued follow-up'
+      });
+    }
+
+    // Update split settings if passed by caller.
+    if (splitFlagProvided) {
+      lead.commissionSplitEnabled = Boolean(commissionSplitEnabled);
+    }
+    if (originatorPctProvided) {
+      lead.originatorCommissionPercentage = Number(originatorCommissionPercentage || 0);
+    }
+
+    // Split cannot apply when the originator is also the assignee.
+    if (lead.createdBy && lead.assignedTo && lead.createdBy._id.toString() === lead.assignedTo.toString()) {
+      lead.commissionSplitEnabled = false;
+      lead.originatorCommissionPercentage = 0;
+    }
+
+    if (lead.commissionSplitEnabled) {
+      const totalPct = Number(lead.commissionPercentage || 0);
+      const originatorPct = Number(lead.originatorCommissionPercentage || 0);
+      if (originatorPct < 0 || originatorPct > totalPct) {
+        return res.status(400).json({
+          message: 'Originator split percentage must be between 0 and total commission percentage'
+        });
+      }
+    }
+
+    await lead.save();
+
+    if (assignmentChanged) {
+      await Activity.create({
+        leadId: lead._id,
+        userId: req.user._id,
+        activityType: 'Note Added',
+        description: `Lead reassigned from ${previousAssigneeUser ? `${previousAssigneeUser.firstName} ${previousAssigneeUser.lastName}` : 'previous assignee'} to ${targetUser.firstName} ${targetUser.lastName}`,
+        outcome: reason || 'Assignment updated'
+      });
+
+      createNotification(
+        targetUser._id,
+        'follow_up',
+        `New lead assigned: ${lead.schoolName}`,
+        `You have been assigned this lead to continue follow-up${reason ? ` (${reason})` : ''}.`,
+        `/leads/${lead._id}`
+      );
+
+      if (previousAssignedTo.toString() !== req.user._id.toString()) {
+        createNotification(
+          previousAssignedTo,
+          'follow_up',
+          `Lead reassigned: ${lead.schoolName}`,
+          `${targetUser.firstName} ${targetUser.lastName} will continue follow-up on this lead.`,
+          `/leads/${lead._id}`
+        );
+      }
+    }
+
+    await AuditLog.create({
+      userId: req.user._id,
+      userEmail: req.user.email,
+      action: 'REASSIGN',
+      resource: 'lead',
+      resourceId: lead._id,
+      changes: {
+        fromAssignedTo: previousAssignedTo,
+        toAssignedTo: lead.assignedTo,
+        commissionSplitEnabled: lead.commissionSplitEnabled,
+        originatorCommissionPercentage: lead.originatorCommissionPercentage,
+        reason: reason || null
+      },
+      ip: req.ip
+    });
+
+    const populatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo', 'firstName lastName email territory')
+      .populate('createdBy', 'firstName lastName email')
+      .populate('reassignmentHistory.fromUser', 'firstName lastName email')
+      .populate('reassignmentHistory.toUser', 'firstName lastName email')
+      .populate('reassignmentHistory.reassignedBy', 'firstName lastName email');
+
+    res.json(populatedLead);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -5,6 +5,7 @@ export const leadService = {
   getLeadById: (id) => api.get(`/leads/${id}`),
   createLead: (data) => api.post('/leads', data),
   updateLead: (id, data) => api.put(`/leads/${id}`, data),
+  reassignLead: (id, data) => api.put(`/leads/${id}/reassign`, data),
   deleteLead: (id) => api.delete(`/leads/${id}`),
   updateStatus: (id, status) => api.put(`/leads/${id}/status`, { status }),
   getOverdue: () => api.get('/leads/overdue'),
