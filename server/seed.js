@@ -11,8 +11,9 @@ const CommissionPayout = require('./models/CommissionPayout');
 
 const seedData = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    const options = process.env.MONGODB_DB ? { dbName: process.env.MONGODB_DB } : {};
+    await mongoose.connect(process.env.MONGODB_URI, options);
+    console.log(`Connected to MongoDB: ${mongoose.connection.name}`);
 
     // Clear existing data
     await User.deleteMany({});

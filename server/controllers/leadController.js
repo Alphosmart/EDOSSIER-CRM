@@ -1,11 +1,14 @@
 const Lead = require('../models/Lead');
+const mongoose = require('mongoose');
 const Activity = require('../models/Activity');
 const CommissionPayout = require('../models/CommissionPayout');
 const AuditLog = require('../models/AuditLog');
+const User = require('../models/User');
 const csv = require('csv-parse/sync');
 const fs = require('fs');
 const path = require('path');
 const { filterLeadsByRole } = require('../utils/queryHelpers');
+const { PERMISSIONS, hasPermission } = require('../utils/permissions');
 
 // @desc    Get all leads (filtered by role)
 // @route   GET /api/leads
@@ -71,7 +74,10 @@ exports.getLeadById = async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.id)
       .populate('assignedTo', 'firstName lastName email territory')
-      .populate('createdBy', 'firstName lastName email');
+      .populate('createdBy', 'firstName lastName email')
+      .populate('reassignmentHistory.fromUser', 'firstName lastName email')
+      .populate('reassignmentHistory.toUser', 'firstName lastName email')
+      .populate('reassignmentHistory.reassignedBy', 'firstName lastName email');
 
     if (!lead) {
       return res.status(404).json({ message: 'Lead not found' });
@@ -295,6 +301,110 @@ exports.updateLeadStatus = async (req, res) => {
   try {
     req.body = { currentStatus: req.body.status || req.body.currentStatus };
     return exports.updateLead(req, res);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Reassign lead owner
+// @route   PUT /api/leads/:id/reassign
+// @access  Private (requires leads:assign)
+exports.reassignLead = async (req, res) => {
+  try {
+    if (!hasPermission(req.user, PERMISSIONS.LEADS_ASSIGN)) {
+      return res.status(403).json({ message: 'You do not have permission to assign leads' });
+    }
+
+    const { assignedTo, reason, commissionSplitEnabled } = req.body;
+    const cleanReason = typeof reason === 'string' ? reason.trim() : '';
+    const originatorShare = Number(req.body.originatorCommissionPercentage || 0);
+
+    if (!assignedTo) {
+      return res.status(400).json({ message: 'Please select a user to assign this lead to' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(assignedTo)) {
+      return res.status(400).json({ message: 'Selected assignee is invalid' });
+    }
+
+    const [lead, assignee] = await Promise.all([
+      Lead.findById(req.params.id),
+      User.findById(assignedTo)
+    ]);
+
+    if (!lead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    if (!assignee || !assignee.isActive) {
+      return res.status(400).json({ message: 'Selected assignee is not an active user' });
+    }
+
+    const totalCommission = Number(lead.commissionPercentage || 0);
+    if (!Number.isFinite(originatorShare) || originatorShare < 0 || originatorShare > totalCommission) {
+      return res.status(400).json({
+        message: `Originator commission share must be between 0 and ${totalCommission}`
+      });
+    }
+
+    const previousAssigneeId = lead.assignedTo?.toString();
+    const nextAssigneeId = assignee._id.toString();
+    const assigneeChanged = previousAssigneeId !== nextAssigneeId;
+
+    if (assigneeChanged) {
+      lead.reassignmentHistory.push({
+        fromUser: lead.assignedTo,
+        toUser: assignee._id,
+        reassignedBy: req.user._id,
+        reason: cleanReason
+      });
+      lead.assignedTo = assignee._id;
+    }
+
+    lead.commissionSplitEnabled = Boolean(commissionSplitEnabled);
+    lead.originatorCommissionPercentage = lead.commissionSplitEnabled ? originatorShare : 0;
+
+    await lead.save();
+
+    const previousAssignee = previousAssigneeId ? await User.findById(previousAssigneeId) : null;
+    const fromName = previousAssignee
+      ? `${previousAssignee.firstName} ${previousAssignee.lastName}`
+      : 'Unassigned';
+    const toName = `${assignee.firstName} ${assignee.lastName}`;
+
+    await Activity.create({
+      leadId: lead._id,
+      userId: req.user._id,
+      activityType: 'Note Added',
+      description: assigneeChanged
+        ? `Lead reassigned from ${fromName} to ${toName}${cleanReason ? `: ${cleanReason}` : ''}`
+        : `Lead assignment updated for ${toName}${cleanReason ? `: ${cleanReason}` : ''}`,
+      outcome: assigneeChanged ? 'Lead reassigned' : 'Assignment updated'
+    });
+
+    await AuditLog.create({
+      userId: req.user._id,
+      userName: `${req.user.firstName} ${req.user.lastName}`,
+      action: 'REASSIGN',
+      resource: 'lead',
+      resourceId: lead._id,
+      changes: {
+        assignedTo: { from: previousAssigneeId, to: nextAssigneeId },
+        commissionSplitEnabled: lead.commissionSplitEnabled,
+        originatorCommissionPercentage: lead.originatorCommissionPercentage
+      },
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
+
+    const updatedLead = await Lead.findById(lead._id)
+      .populate('assignedTo', 'firstName lastName email territory')
+      .populate('createdBy', 'firstName lastName email')
+      .populate('reassignmentHistory.fromUser', 'firstName lastName email')
+      .populate('reassignmentHistory.toUser', 'firstName lastName email')
+      .populate('reassignmentHistory.reassignedBy', 'firstName lastName email');
+
+    res.json(updatedLead);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
