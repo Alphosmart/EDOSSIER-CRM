@@ -7,8 +7,7 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed": "node seed.js",
-    "test:rbac": "node scripts/rbac-regression.js",
-    "migrate:commission-payout-role": "node scripts/backfill-commission-payout-role.js"
+    "test:rbac": "node scripts/rbac-regression.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

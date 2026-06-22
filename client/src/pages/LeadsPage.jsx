@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   HiOutlinePlus, HiOutlineSearch, HiOutlineUpload,
   HiOutlineX, HiOutlineDocumentText, HiOutlineCheckCircle,
-  HiOutlineUser, HiOutlineBell, HiOutlineFilter, HiOutlinePencil
+  HiOutlineUser, HiOutlineBell
 } from 'react-icons/hi';
 
 export default function LeadsPage() {
@@ -377,7 +377,6 @@ export default function LeadsPage() {
                 <th className="pb-3 font-semibold text-gray-700 text-right">Probability</th>
                 <th className="pb-3 font-semibold text-gray-700">Assigned To</th>
                 <th className="pb-3 font-semibold text-gray-700">Brought By</th>
-                <th className="pb-3 font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -417,16 +416,6 @@ export default function LeadsPage() {
                         }
                       </span>
                     ) : <span className="text-gray-400">—</span>}
-                  </td>
-                  <td className="py-3">
-                    <Link 
-                      to={`/leads/${lead._id}`} 
-                      className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors"
-                      title="View and edit lead details"
-                    >
-                      <HiOutlinePencil className="w-3.5 h-3.5" />
-                      Edit
-                    </Link>
                   </td>
                 </tr>
               ))}

@@ -1,18 +1,16 @@
-# Backend Scripts
+# RBAC Regression Script
 
-This folder contains backend utility and regression scripts.
+This folder contains backend role-access regression checks.
 
 ## Script
 
 - `rbac-regression.js` — runs non-destructive permission checks against a running API server.
-- `backfill-commission-payout-role.js` — sets `payoutRole` to `owner` for legacy commission rows where it is missing.
 
 ## Run
 
 ```bash
 cd server
 npm run test:rbac
-npm run migrate:commission-payout-role
 ```
 
 ## Optional environment overrides
@@ -22,5 +20,3 @@ npm run migrate:commission-payout-role
 - `RBAC_MANAGER_EMAIL`, `RBAC_MANAGER_PASSWORD`
 
 The script creates temporary `bursar` and `sales_rep` users for deterministic checks, then deactivates them automatically.
-
-The commission backfill script only updates records with missing/empty `payoutRole`.

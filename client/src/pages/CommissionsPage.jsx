@@ -26,41 +26,6 @@ function CommissionBadge({ status }) {
   );
 }
 
-function PayoutRoleBadge({ role }) {
-  const normalized = role || 'owner';
-  const styles = {
-    owner: 'bg-gray-100 text-gray-700',
-    assignee: 'bg-blue-100 text-blue-800',
-    originator: 'bg-purple-100 text-purple-800'
-  };
-  const labels = {
-    owner: 'Owner',
-    assignee: 'Assignee',
-    originator: 'Originator'
-  };
-  return (
-    <span className={`px-2 py-1 text-xs rounded-full font-medium ${styles[normalized] || styles.owner}`}>
-      {labels[normalized] || 'Owner'}
-    </span>
-  );
-}
-
-function SplitVerificationBadge({ info }) {
-  if (!info?.isSplit) {
-    return <span className="px-2 py-1 text-xs rounded-full font-medium bg-gray-100 text-gray-700">Single payout</span>;
-  }
-
-  if (info.isLegacyInferredSplit) {
-    return <span className="px-2 py-1 text-xs rounded-full font-medium bg-indigo-100 text-indigo-800">Split detected (legacy)</span>;
-  }
-
-  if (info.isVerified) {
-    return <span className="px-2 py-1 text-xs rounded-full font-medium bg-green-100 text-green-800">Split verified</span>;
-  }
-
-  return <span className="px-2 py-1 text-xs rounded-full font-medium bg-amber-100 text-amber-800">Split incomplete</span>;
-}
-
 // ── Disburse modal ────────────────────────────────────────────────────────────
 function DisburseModal({ commission, rateMap, onClose, onConfirm }) {
   const [ref, setRef] = useState('');
@@ -205,61 +170,11 @@ export default function CommissionsPage() {
   const filtered = filter === 'all' ? commissions : commissions.filter(c => c.status === filter);
   const FILTERS = ['all', 'Pending', 'Approved', 'Disbursed', 'Paid'];
 
-  const idValue = (entity) => {
-    if (!entity) return '';
-    if (typeof entity === 'string') return entity;
-    if (typeof entity === 'object') {
-      if (entity._id) return idValue(entity._id);
-      if (entity.$oid) return String(entity.$oid);
-      if (typeof entity.toString === 'function') return entity.toString();
-    }
-    return String(entity);
-  };
-
-  const getSplitInfo = (commission) => {
-    const leadId = idValue(commission?.leadId);
-    if (!leadId) {
-      return {
-        isSplit: false,
-        isVerified: false,
-        isLegacyInferredSplit: false,
-        siblingCount: 0,
-        distinctUserCount: 0,
-        combinedRate: Number(commission?.commissionPercentage || 0)
-      };
-    }
-
-    const siblings = commissions.filter((item) => {
-      const itemLeadId = idValue(item?.leadId);
-      return itemLeadId === leadId;
-    });
-
-    const roles = siblings.map((item) => item.payoutRole || 'owner');
-    const hasOriginator = roles.includes('originator');
-    const hasAssignee = roles.includes('assignee');
-    const structuredSplit = hasOriginator || hasAssignee;
-
-    // Legacy safety net: older split rows may both be marked as owner.
-    const distinctUserCount = new Set(siblings.map((item) => idValue(item.userId))).size;
-    const legacyInferredSplit = !structuredSplit && siblings.length > 1 && distinctUserCount > 1;
-    const isSplit = structuredSplit || legacyInferredSplit;
-
-    return {
-      isSplit,
-      isVerified: hasOriginator && hasAssignee,
-      isLegacyInferredSplit: legacyInferredSplit,
-      siblingCount: siblings.length,
-      distinctUserCount,
-      combinedRate: siblings.reduce((sum, item) => sum + Number(item.commissionPercentage || 0), 0)
-    };
-  };
-
   const downloadCSV = () => {
-    const headers = ['School', 'Sales Rep', 'Payout Role', 'Deal Value (USD)', 'Rate (%)', 'Commission (USD)', 'Status', 'Date'];
+    const headers = ['School', 'Sales Rep', 'Deal Value (USD)', 'Rate (%)', 'Commission (USD)', 'Status', 'Date'];
     const rows = filtered.map(c => [
       `"${c.leadId?.schoolName || ''}"`,
       `"${c.userId?.firstName || ''} ${c.userId?.lastName || ''}"`,
-      c.payoutRole || 'owner',
       c.dealAmount || 0,
       c.commissionPercentage || 0,
       c.commissionAmount || 0,
@@ -401,8 +316,6 @@ export default function CommissionsPage() {
                   <tr className="bg-gray-50 text-left text-gray-500 uppercase text-xs">
                     <th className="px-4 py-3">School</th>
                     {isManagerOrAdmin && <th className="px-4 py-3">Rep</th>}
-                    <th className="px-4 py-3">Payout Role</th>
-                    {isAdminOrBursar && <th className="px-4 py-3">Split Check</th>}
                     <th className="px-4 py-3 text-right">Deal Value</th>
                     <th className="px-4 py-3 text-center">Rate</th>
                     <th className="px-4 py-3 text-right">Commission</th>
@@ -414,13 +327,12 @@ export default function CommissionsPage() {
                 <tbody className="divide-y">
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={isManagerOrAdmin ? (isAdminOrBursar ? 10 : 9) : (isAdminOrBursar ? 9 : 8)} className="px-4 py-10 text-center text-gray-400">
+                      <td colSpan={isManagerOrAdmin ? 8 : 7} className="px-4 py-10 text-center text-gray-400">
                         No commissions found
                       </td>
                     </tr>
                   ) : filtered.map(c => {
                     const isOwner = c.userId?._id === user?._id || c.userId === user?._id;
-                    const splitInfo = getSplitInfo(c);
                     return (
                       <tr key={c._id} className="hover:bg-gray-50 align-top">
                         <td className="px-4 py-3 font-medium">
@@ -431,17 +343,6 @@ export default function CommissionsPage() {
                           <td className="px-4 py-3 whitespace-nowrap">
                             {c.userId?.firstName} {c.userId?.lastName}
                             {c.userId?.territory && <p className="text-xs text-gray-400">{c.userId.territory}</p>}
-                          </td>
-                        )}
-                        <td className="px-4 py-3"><PayoutRoleBadge role={c.payoutRole} /></td>
-                        {isAdminOrBursar && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <SplitVerificationBadge info={splitInfo} />
-                            {splitInfo.isSplit && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                {splitInfo.siblingCount} payout rows • {splitInfo.distinctUserCount} users • {splitInfo.combinedRate}% total
-                              </p>
-                            )}
                           </td>
                         )}
                         <td className="px-4 py-3 text-right">{fmt(c.dealAmount)}</td>

@@ -96,18 +96,6 @@ export default function ReportsPage() {
     ...(hasRole('manager', 'admin', 'bursar') ? [{ id: 'territory', label: 'Territory Report' }] : [])
   ];
 
-  const commissionDetails =
-    commissionReport?.details ||
-    commissionReport?.commissions?.map((c) => ({
-      schoolName: c.leadId?.schoolName || 'N/A',
-      dealValue: c.dealAmount || 0,
-      rate: c.commissionPercentage || 0,
-      commission: c.commissionAmount || 0,
-      status: c.status || 'Pending',
-      payoutRole: c.payoutRole || 'owner'
-    })) ||
-    [];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -265,7 +253,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {commissionDetails.length > 0 && (
+          {commissionReport.details && commissionReport.details.length > 0 && (
             <div className="card overflow-hidden">
               <h3 className="text-lg font-semibold mb-4">Commission Details</h3>
               <div className="overflow-x-auto">
@@ -273,7 +261,6 @@ export default function ReportsPage() {
                   <thead>
                     <tr className="bg-gray-50 text-left text-gray-500 uppercase text-xs">
                       <th className="px-4 py-3">School</th>
-                      <th className="px-4 py-3">Payout Role</th>
                       <th className="px-4 py-3">Deal Value</th>
                       <th className="px-4 py-3">Rate</th>
                       <th className="px-4 py-3">Commission</th>
@@ -281,10 +268,9 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {commissionDetails.map((d, i) => (
+                    {commissionReport.details.map((d, i) => (
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{d.schoolName}</td>
-                        <td className="px-4 py-3 capitalize">{d.payoutRole || 'owner'}</td>
                         <td className="px-4 py-3">{fmt(d.dealValue)}</td>
                         <td className="px-4 py-3">{d.rate}%</td>
                         <td className="px-4 py-3 font-bold text-green-600">{fmt(d.commission)}</td>
